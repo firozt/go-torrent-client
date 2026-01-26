@@ -75,26 +75,26 @@ func unmarshal(reader io.Reader, data *BencodeTorrent) error {
 	return err
 }
 
-func parseInt(buf []byte) (uint64, error) {
+func parseInt(buf []byte) (uint64, uint64, error) {
 	// starts with an i ends with e with int between
 	if len(buf) < 1 || string(buf[0]) != "i" {
-		return 0, fmt.Errorf("Not a valid Bencode Int")
+		return 0, 0, fmt.Errorf("Not a valid Bencode Int")
 	}
 	i := 1
 	res := ""
 	for i < len(buf) && string(buf[i]) != "e" {
 		digit, err := isDigit(buf[i])
 		if err != nil {
-			return 0, fmt.Errorf("Invalid Bencode, cannot parse integer there is a non e terminating character %s\n", string(buf[i]))
+			return 0, 0, fmt.Errorf("Invalid Bencode, cannot parse integer there is a non e terminating character %s\n", string(buf[i]))
 		}
 		res += strconv.FormatUint(digit, 10)
 		i++
 	}
 	convertedRes, err := strconv.Atoi(res)
 	if err != nil {
-		return 0, fmt.Errorf("Unable to convert result into number, parseInt function logic probably the cause\n")
+		return 0, 0, fmt.Errorf("Unable to convert result into number, parseInt function logic probably the cause\n")
 	}
-	return uint64(convertedRes), nil
+	return uint64(convertedRes), uint64(i + 1), nil
 }
 
 // where buf[0] is the start of the digit that represents the length

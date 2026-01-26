@@ -71,22 +71,23 @@ func TestGetStringLength(t *testing.T) {
 
 func TestParseInt(t *testing.T) {
 	type TestCase struct {
-		testName    string
-		input       string
-		expected    uint64
-		throwsError bool
+		testName         string
+		input            string
+		expected         uint64
+		expectedEndIndex uint64
+		throwsError      bool
 	}
 
 	testcase := []TestCase{
-		{"valid 32", "i32e", 32, false},
-		{"invalid int", "i123x42", 0, true},
-		{"valid 0", "i0e", 0, false},
-		{"invalid contains space", "i3 2e", 0, true},
+		{"valid 32", "i32e", 32, 4, false},
+		{"invalid int", "i123x42", 0, 0, true},
+		{"valid 0", "i0e", 0, 3, false},
+		{"invalid contains space", "i3 2e", 0, 0, true},
 	}
 
 	for _, tc := range testcase {
 		t.Run(tc.testName, func(t *testing.T) {
-			got, err := parseInt([]byte(tc.input))
+			got, gotEndIndex, err := parseInt([]byte(tc.input))
 
 			if tc.throwsError && err == nil {
 				t.Errorf("Expected an error did not recieve any")
@@ -96,6 +97,9 @@ func TestParseInt(t *testing.T) {
 			}
 			if tc.expected != got {
 				t.Errorf("Wrong output got %d wanted %d\n", got, tc.expected)
+			}
+			if tc.expectedEndIndex != gotEndIndex {
+				t.Errorf("Wrong end index got %d wanted %d\n", gotEndIndex, tc.expectedEndIndex)
 			}
 		})
 	}
