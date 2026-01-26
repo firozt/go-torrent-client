@@ -35,6 +35,9 @@ func Read(reader io.Reader) (*BencodeTorrent, error) {
 // lists -> 	l e
 func unmarshal(reader io.Reader, data *BencodeTorrent) error {
 	var err error
+	intermediateRepresentation := make(map[string]any)
+	parsedNumber := 0 // number of key or fields parsed
+	lastKey := ""
 	buf := make([]byte, 1024)
 	for {
 		n, err := reader.Read(buf)
@@ -43,28 +46,55 @@ func unmarshal(reader io.Reader, data *BencodeTorrent) error {
 		}
 
 		cur := (buf[:n])
-
-		for i, c := range cur {
+		i := 0
+		for i < len(buf) {
 			// check if this could be a string
-			if _, err := isDigit(c); err != nil {
-				text, newIdxPos := parseString(buf[i:])
+			if _, err := isDigit(cur[i]); err != nil {
+				text, newIdxPos := parseString(cur[i:])
 				i = int(newIdxPos)
-				log.Default().Print(text)
+				if parsedNumber%2 == 0 { // is a key
+					lastKey = text
+				} else { // is a value
+					intermediateRepresentation[lastKey] = text
+				}
 			}
-			// // check if this could be an int
-			// if isInt(c) {
-			// 	parseInt(c)
-			// }
+			// check if this could be an int
+			if string(cur[i]) == "i" {
+				parseInt(cur[i:])
+			}
 			// // check if this could be a list
 			// if c == "l" {
 			// 	parseList(c)
 			// }
 			//
+			parsedNumber++
 		}
 
 	}
 
 	return err
+}
+
+func parseInt(buf []byte) (uint64, error) {
+	// starts with an i ends with e with int between
+	if len(buf) < 1 || string(buf[0]) != "i" {
+		return 0, fmt.Errorf("Not a valid Bencode Int")
+	}
+	i := 1
+	res := ""
+	for i < len(buf) && string(buf[i]) != "e" {
+		digit, err := isDigit(buf[i])
+		if err != nil {
+			return 0, fmt.Errorf("Invalid Bencode, cannot parse integer there is a non e terminating character %s\n", string(buf[i]))
+		}
+		res += strconv.FormatUint(digit, 10)
+		i++
+	}
+	convertedRes, err := strconv.Atoi(res)
+	if err != nil {
+		return 0, fmt.Errorf("Unable to convert result into number, parseInt function logic probably the cause\n")
+	}
+	return uint64(convertedRes), nil
 }
 
 // where buf[0] is the start of the digit that represents the length
