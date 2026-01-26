@@ -1,9 +1,9 @@
-package main
+package bencodeparser
 
 import (
-	"errors"
 	"fmt"
 	"io"
+	"log"
 	"strconv"
 )
 
@@ -47,7 +47,9 @@ func unmarshal(reader io.Reader, data *BencodeTorrent) error {
 		for i, c := range cur {
 			// check if this could be a string
 			if _, err := isDigit(c); err != nil {
-				parseString(buf[i:])
+				text, newIdxPos := parseString(buf[i:])
+				i = int(newIdxPos)
+				log.Default().Print(text)
 			}
 			// // check if this could be an int
 			// if isInt(c) {
@@ -67,18 +69,18 @@ func unmarshal(reader io.Reader, data *BencodeTorrent) error {
 
 // where buf[0] is the start of the digit that represents the length
 // retruns (string value, index of end of string)
-func parseString(buf []byte) (string, uint64, error) {
+func parseString(buf []byte) (string, uint64) {
 	stringLength, strIndex, err := getStringLength(buf)
 	if err != nil {
-		return "", 0, fmt.Errorf("unable to parse string length: %w", err)
+		log.Fatalf("unable to parse string length: %s\n", err)
 	}
 
 	if strIndex+stringLength > uint64(len(buf)) {
-		return "", 0, errors.New("string is bigger than buffer")
+		log.Fatalf("HAVE NOT IMPLEMENTED NEXT BUFFER HANDLING")
 		// TODO: implement logic to parse next buffer also
 	}
 
-	return string(buf[strIndex : strIndex+stringLength]), strIndex + stringLength, nil
+	return string(buf[strIndex : strIndex+stringLength]), strIndex + stringLength
 }
 
 // returns length of the string, index of start of string, error

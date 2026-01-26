@@ -1,4 +1,4 @@
-package main
+package bencodeparser
 
 import "testing"
 
@@ -18,7 +18,7 @@ func TestParseString(t *testing.T) {
 
 	for _, tc := range testcase {
 		t.Run(tc.testName, func(t *testing.T) {
-			gotString, gotStart, _ := parseString([]byte(tc.input))
+			gotString, gotStart := parseString([]byte(tc.input))
 			if gotString != tc.expectedString {
 				t.Errorf("Incorrect string value, got %s wanted %s\n", gotString, tc.expectedString)
 			}
