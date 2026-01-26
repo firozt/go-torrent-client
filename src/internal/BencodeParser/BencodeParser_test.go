@@ -18,7 +18,7 @@ func TestParseString(t *testing.T) {
 
 	for _, tc := range testcase {
 		t.Run(tc.testName, func(t *testing.T) {
-			gotString, gotStart, _ := parseString([]byte(tc.input))
+			gotString, gotStart, _ := parseString([]byte(tc.input), 0)
 			if gotString != tc.expectedString {
 				t.Errorf("Incorrect string value, got %s wanted %s\n", gotString, tc.expectedString)
 			}
@@ -48,7 +48,7 @@ func TestGetStringLength(t *testing.T) {
 
 	for _, tc := range testcase {
 		t.Run(tc.testName, func(t *testing.T) {
-			gotLength, gotStartOfString, gotError := getStringLength([]byte(tc.input))
+			gotLength, gotStartOfString, gotError := getStringLength([]byte(tc.input), 0)
 
 			if tc.throwsError && gotError == nil {
 				t.Errorf("Expected an error didnt recieve one\n")
@@ -87,7 +87,7 @@ func TestParseInt(t *testing.T) {
 
 	for _, tc := range testcase {
 		t.Run(tc.testName, func(t *testing.T) {
-			got, gotEndIndex, err := parseInt([]byte(tc.input))
+			got, gotEndIndex, err := parseInt([]byte(tc.input), 0)
 
 			if tc.throwsError && err == nil {
 				t.Errorf("Expected an error did not recieve any")
