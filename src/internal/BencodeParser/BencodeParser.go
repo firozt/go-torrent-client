@@ -50,7 +50,10 @@ func unmarshal(reader io.Reader, data *BencodeTorrent) error {
 		for i < len(buf) {
 			// check if this could be a string
 			if _, err := isDigit(cur[i]); err != nil {
-				text, newIdxPos := parseString(cur[i:])
+				text, newIdxPos, err := parseString(cur[i:])
+				if err != nil {
+					log.Fatalf("Unable to parse string\n")
+				}
 				i = int(newIdxPos)
 				if parsedNumber%2 == 0 { // is a key
 					lastKey = text
@@ -60,7 +63,13 @@ func unmarshal(reader io.Reader, data *BencodeTorrent) error {
 			}
 			// check if this could be an int
 			if string(cur[i]) == "i" {
-				parseInt(cur[i:])
+				num, newIdxPos, err := parseInt(cur[i:])
+				if err != nil {
+					log.Fatalf("Unable to parse integer value \n")
+				}
+				// an int cannot be a key
+				intermediateRepresentation[lastKey] = num
+				i = int(newIdxPos)
 			}
 			// // check if this could be a list
 			// if c == "l" {
@@ -99,10 +108,10 @@ func parseInt(buf []byte) (uint64, uint64, error) {
 
 // where buf[0] is the start of the digit that represents the length
 // retruns (string value, index of end of string)
-func parseString(buf []byte) (string, uint64) {
+func parseString(buf []byte) (string, uint64, error) {
 	stringLength, strIndex, err := getStringLength(buf)
 	if err != nil {
-		log.Fatalf("unable to parse string length: %s\n", err)
+		return "", 0, fmt.Errorf("unable to parse string length: %s\n", err)
 	}
 
 	if strIndex+stringLength > uint64(len(buf)) {
@@ -110,7 +119,7 @@ func parseString(buf []byte) (string, uint64) {
 		// TODO: implement logic to parse next buffer also
 	}
 
-	return string(buf[strIndex : strIndex+stringLength]), strIndex + stringLength
+	return string(buf[strIndex : strIndex+stringLength]), strIndex + stringLength, nil
 }
 
 // returns length of the string, index of start of string, error
