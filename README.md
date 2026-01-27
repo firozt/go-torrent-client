@@ -24,4 +24,4 @@ The CFG ruleset above is within the set of LL(1) grammars allowing it easily to 
 even does this very thing. However none exist for Go so I wrote everything by hand. The package also deals with large amount of bytes efficiently by
 parsing buffer by buffer, whilst maintaining state between buffer changes. This is important as as the file grows the number of pieces (field in bencode data
 will also grow)
----
+
