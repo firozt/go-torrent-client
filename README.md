@@ -7,7 +7,7 @@ client written primarily in the Go programming langugae without the use of any t
 
 ## Packages
 ### BencodeParser
-- `/src/internal/BencodeParser`  
+directory : `/src/internal/BencodeParser`  
 Contains logic for mapping a .torrent file to a BencodeTorrent struct
 Uses a recursive descent algorithm to parse each token and assign them to a key and value
 The parser first forms an intermediate representation of the data in the form `map[string]anY` as bencode data can carry
