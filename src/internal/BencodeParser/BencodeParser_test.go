@@ -1,6 +1,13 @@
 package bencodeparser
 
-import "testing"
+import (
+	"fmt"
+	"io"
+	"log"
+	"os"
+	"reflect"
+	"testing"
+)
 
 func TestParseString(t *testing.T) {
 	type TestCase struct {
@@ -103,4 +110,53 @@ func TestParseInt(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestPackage(t *testing.T) {
+	type TestCase struct {
+		fileName       string
+		expectedOutput *BencodeTorrent
+		throwsError    bool
+	}
+	// files with test data info
+	testcase := []TestCase{
+		{
+			fileName: "alice.torrent",
+			expectedOutput: &BencodeTorrent{
+				CreationDate: 1452468725091,
+				Info: BencodeInfo{
+					Length:     163783,
+					Name:       "alice.txt",
+					PieceLenth: 16384,
+					Piece:      [][20]byte{}, // skip comparison for this for now
+				},
+			},
+			throwsError: false,
+		},
+	}
+
+	for _, tc := range testcase {
+		t.Run(tc.fileName, func(t *testing.T) {
+			bencodeData, err := Read(readTestDataFile(tc.fileName))
+			if !tc.throwsError && err != nil {
+				t.Errorf("unexpected error thrown by Read - %s\n", err)
+			}
+			// set piece field to empty  as we skip this check for now
+			bencodeData.InfoHash = [20]byte{}
+			bencodeData.Info.Piece = [][20]byte{}
+
+			if !reflect.DeepEqual(bencodeData, tc.expectedOutput) {
+				t.Errorf("got values and wanted are different\n got :\n%+v\nwanted:\n%+v\n", bencodeData, tc.expectedOutput)
+			}
+		})
+	}
+}
+
+func readTestDataFile(filename string) io.Reader {
+	testdataDir := "../testdata"
+	f, err := os.Open(fmt.Sprintf("%s/%s", testdataDir, filename))
+	if err != nil {
+		log.Fatalln("Unable to open test file")
+	}
+	return f
 }

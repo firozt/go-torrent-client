@@ -1,6 +1,7 @@
 package bencodeparser
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -10,13 +11,14 @@ import (
 type BencodeInfo struct {
 	Length     uint64     `bencode:"length"`
 	Name       string     `bencode:"name"`
-	PieceLenth uint64     `bencode:"piece_length"`
-	Piece      [][20]byte // list of sha-1 hashes with a 20 byte output
+	PieceLenth uint64     `bencode:"piece length"`
+	Piece      [][20]byte `bencode:"pieces"` // list of sha-1 hashes with a 20 byte output
 }
 
 type BencodeTorrent struct {
+	InfoHash     [20]byte    `bencode:"info hash"` // sha-1 hash of info fields raw data
 	Announce     string      `bencode:"announce"`
-	CreationDate string      `bencode:"creation_date"`
+	CreationDate uint64      `bencode:"creation date"`
 	Info         BencodeInfo `bencode:"info"`
 }
 
@@ -26,6 +28,30 @@ func Read(reader io.Reader) (*BencodeTorrent, error) {
 	err := unmarshal(reader, &torrent)
 
 	return &torrent, err
+}
+
+func IRToBencode(ir map[string]any, data *BencodeTorrent) {
+	marshalled, _ := json.Marshal(ir)
+	// prettyPrintMap(ir)
+	err := json.Unmarshal(marshalled, data)
+	if err != nil {
+		log.Fatalf("Cannot marshal unmarshaled data, should realistically never happen but linter complains")
+	}
+
+	if info, ok := ir["info"].(map[string]any); ok {
+		if pieceLength, ok := info["piece length"]; ok {
+			data.Info.PieceLenth = pieceLength.(uint64)
+		}
+	}
+	data.CreationDate = ir["creation date"].(uint64)
+}
+
+func prettyPrintMap(x map[string]any) {
+	b, err := json.MarshalIndent(x, "", "  ")
+	if err != nil {
+		fmt.Println("error:", err)
+	}
+	fmt.Print(string(b))
 }
 
 // structure of bencode data
@@ -40,7 +66,8 @@ func unmarshal(reader io.Reader, data *BencodeTorrent) error {
 	if err != nil {
 		log.Fatalf("Unable to parse bencode raw data - %s", err)
 	}
-	fmt.Println(IRData)
+	IRToBencode(IRData.(map[string]any), data)
+	// prettyPrintMap(IRData.(map[string]any))
 	return nil
 }
 
