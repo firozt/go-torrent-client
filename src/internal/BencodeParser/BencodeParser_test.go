@@ -25,7 +25,8 @@ func TestParseString(t *testing.T) {
 
 	for _, tc := range testcase {
 		t.Run(tc.testName, func(t *testing.T) {
-			gotString, gotStart, _ := parseString([]byte(tc.input), 0)
+			p := MakeBencodeParser()
+			gotString, gotStart, _ := p.parseString([]byte(tc.input), 0)
 			if gotString != tc.expectedString {
 				t.Errorf("Incorrect string value, got %s wanted %s\n", gotString, tc.expectedString)
 			}
@@ -55,7 +56,8 @@ func TestGetStringLength(t *testing.T) {
 
 	for _, tc := range testcase {
 		t.Run(tc.testName, func(t *testing.T) {
-			gotLength, gotStartOfString, gotError := getStringLength([]byte(tc.input), 0)
+			p := MakeBencodeParser()
+			gotLength, gotStartOfString, gotError := p.getStringLength([]byte(tc.input), 0)
 
 			if tc.throwsError && gotError == nil {
 				t.Errorf("Expected an error didnt recieve one\n")
@@ -94,7 +96,8 @@ func TestParseInt(t *testing.T) {
 
 	for _, tc := range testcase {
 		t.Run(tc.testName, func(t *testing.T) {
-			got, gotEndIndex, err := parseInt([]byte(tc.input), 0)
+			p := MakeBencodeParser()
+			got, gotEndIndex, err := p.parseInt([]byte(tc.input), 0)
 
 			if tc.throwsError && err == nil {
 				t.Errorf("Expected an error did not recieve any")
@@ -137,7 +140,8 @@ func TestPackage(t *testing.T) {
 
 	for _, tc := range testcase {
 		t.Run(tc.fileName, func(t *testing.T) {
-			bencodeData, err := Read(readTestDataFile(tc.fileName))
+			p := MakeBencodeParser()
+			bencodeData, err := p.Read(readTestDataFile(tc.fileName))
 			if !tc.throwsError && err != nil {
 				t.Errorf("unexpected error thrown by Read - %s\n", err)
 			}
