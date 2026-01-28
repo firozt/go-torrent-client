@@ -1,6 +1,7 @@
 package bencodeparser
 
 import (
+	"crypto/sha1"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -23,16 +24,18 @@ type BencodeTorrent struct {
 }
 
 type BencodeParser struct {
-	IR        map[string]any // intermediate representation of the BencodeData
-	curParse  []byte         // holds current leaf node parsing data for change of buffers
-	infoBytes []byte         // holds all the bytes of the info dict
+	InInfoField bool
+	IR          map[string]any // intermediate representation of the BencodeData
+	curParse    []byte         // holds current leaf node parsing data for change of buffers
+	infoBytes   []byte         // holds all the bytes of the info dict
 }
 
 func MakeBencodeParser() *BencodeParser {
 	return &BencodeParser{
-		IR:        make(map[string]any),
-		curParse:  []byte{},
-		infoBytes: []byte{},
+		InInfoField: false,
+		IR:          make(map[string]any),
+		curParse:    []byte{},
+		infoBytes:   []byte{},
 	}
 }
 
@@ -46,7 +49,6 @@ func (b *BencodeParser) Read(reader io.Reader) (*BencodeTorrent, error) {
 
 func (b *BencodeParser) IRToBencode(ir map[string]any, data *BencodeTorrent) {
 	marshalled, _ := json.Marshal(ir)
-	// prettyPrintMap(ir)
 	err := json.Unmarshal(marshalled, data)
 	if err != nil {
 		log.Fatalf("Cannot marshal unmarshaled data, should realistically never happen but linter complains")
@@ -58,9 +60,12 @@ func (b *BencodeParser) IRToBencode(ir map[string]any, data *BencodeTorrent) {
 		}
 	}
 	data.CreationDate = ir["creation date"].(uint64)
+	data.InfoHash = sha1.Sum(b.infoBytes)
+
+	// prettyPrintMap(ir)
 }
 
-func (b *BencodeParser) prettyPrintMap(x map[string]any) {
+func prettyPrintMap(x map[string]any) {
 	bc, err := json.MarshalIndent(x, "", "  ")
 	if err != nil {
 		fmt.Println("error:", err)
@@ -104,18 +109,24 @@ func (b *BencodeParser) parseValue(buf []byte, i uint64) (any, uint64, error) {
 	}
 }
 
+// TODO: Add logic to append if err = EOB error
 func (b *BencodeParser) parseDict(buf []byte, i uint64) (map[string]any, uint64, error) {
 	res := make(map[string]any)
 
 	if i >= uint64(len(buf)) || string(buf[i]) != "d" {
 		return res, 0, fmt.Errorf("unable to parse dict")
 	}
+	numParsedFields := 0
+	startIdx := i
+	lastField := ""
 	i++
 
-	numParsedFields := 0
-	lastField := ""
 	for i < uint64(len(buf)) {
 		if string(buf[i]) == "e" {
+			if b.InInfoField {
+				b.InInfoField = false
+				b.infoBytes = append(b.infoBytes, buf[startIdx:i+1]...) // include cur 'e' byte
+			}
 			break
 		}
 		value, newIdx, err := b.parseValue(buf, i)
@@ -181,7 +192,6 @@ func (b *BencodeParser) parseInt(buf []byte, i uint64) (uint64, uint64, error) {
 	return uint64(convertedRes), uint64(i + 1), nil
 }
 
-// where buf[0] is the start of the digit that represents the length
 // retruns (string value, index of end of string)
 func (b *BencodeParser) parseString(buf []byte, i uint64) (string, uint64, error) {
 	stringLength, strIndex, err := b.getStringLength(buf, i)
@@ -193,7 +203,13 @@ func (b *BencodeParser) parseString(buf []byte, i uint64) (string, uint64, error
 		// TODO: implement logic to parse next buffer also
 	}
 
-	return string(buf[strIndex : strIndex+stringLength]), strIndex + stringLength, nil
+	parsedStringValue := string(buf[strIndex : strIndex+stringLength])
+	if parsedStringValue == "info" {
+		b.InInfoField = true
+	}
+	if parsedStringValue == "piece" {
+	}
+	return parsedStringValue, strIndex + stringLength, nil
 }
 
 // returns length of the string, index of start of string, error
