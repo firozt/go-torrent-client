@@ -25,8 +25,12 @@ func TestParseString(t *testing.T) {
 
 	for _, tc := range testcase {
 		t.Run(tc.testName, func(t *testing.T) {
-			p := MakeBencodeParser()
-			gotString, gotStart, _ := p.acceptString([]byte(tc.input), 0)
+			p := BencodeParser{
+				buf:     []byte(tc.input),
+				cur_idx: 0,
+				buf_len: uint64(len([]byte(tc.input))),
+			}
+			gotString, gotStart, _ := p.acceptString()
 			if gotString != tc.expectedString {
 				t.Errorf("Incorrect string value, got %s wanted %s\n", gotString, tc.expectedString)
 			}
@@ -56,8 +60,12 @@ func TestGetStringLength(t *testing.T) {
 
 	for _, tc := range testcase {
 		t.Run(tc.testName, func(t *testing.T) {
-			p := MakeBencodeParser()
-			gotLength, gotStartOfString, gotError := p.getStringLength([]byte(tc.input), 0)
+			p := BencodeParser{
+				buf:     []byte(tc.input),
+				cur_idx: 0,
+				buf_len: uint64(len([]byte(tc.input))),
+			}
+			gotLength, gotStartOfString, gotError := p.getStringLength()
 
 			if tc.throwsError && gotError == nil {
 				t.Errorf("Expected an error didnt recieve one\n")
@@ -96,8 +104,13 @@ func TestParseInt(t *testing.T) {
 
 	for _, tc := range testcase {
 		t.Run(tc.testName, func(t *testing.T) {
-			p := MakeBencodeParser()
-			got, gotEndIndex, err := p.acceptInt([]byte(tc.input), 0)
+			p := BencodeParser{
+				buf:     []byte(tc.input),
+				cur_idx: 0,
+				buf_len: uint64(len([]byte(tc.input))),
+			}
+
+			got, gotEndIndex, err := p.acceptInt()
 
 			if tc.throwsError && err == nil {
 				t.Errorf("Expected an error did not recieve any")
