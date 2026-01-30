@@ -97,20 +97,20 @@ func (b *BencodeParser) parseValue(buf []byte, i uint64) (any, uint64, error) {
 
 	switch string(buf[i]) {
 	case "i": // int
-		return b.parseInt(buf, i)
+		return b.acceptInt(buf, i)
 	case "0", "1", "2", "3", "4", "5", "6", "7", "8", "9": // string
-		return b.parseString(buf, i)
+		return b.acceptString(buf, i)
 	case "d": // dict (map[string]any)
-		return b.parseDict(buf, i)
+		return b.acceptDict(buf, i)
 	case "l": // list ([]any)
-		return b.parseList(buf, i)
+		return b.acceptList(buf, i)
 	default:
 		return nil, 0, fmt.Errorf("could not find a suitable accept type for %s at index %d", string(buf[i]), i)
 	}
 }
 
 // TODO: Add logic to append if err = EOB error
-func (b *BencodeParser) parseDict(buf []byte, i uint64) (map[string]any, uint64, error) {
+func (b *BencodeParser) acceptDict(buf []byte, i uint64) (map[string]any, uint64, error) {
 	res := make(map[string]any)
 
 	if i >= uint64(len(buf)) || string(buf[i]) != "d" {
@@ -148,7 +148,7 @@ func (b *BencodeParser) parseDict(buf []byte, i uint64) (map[string]any, uint64,
 	return res, i + 1, nil
 }
 
-func (b *BencodeParser) parseList(buf []byte, i uint64) ([]any, uint64, error) {
+func (b *BencodeParser) acceptList(buf []byte, i uint64) ([]any, uint64, error) {
 	var resList []any
 	if len(buf) < 1 || string(buf[i]) != "l" {
 		return resList, 0, fmt.Errorf("invalid accept type of list has been chosen")
@@ -171,7 +171,7 @@ func (b *BencodeParser) parseList(buf []byte, i uint64) ([]any, uint64, error) {
 	return resList, i + 1, nil
 }
 
-func (b *BencodeParser) parseInt(buf []byte, i uint64) (uint64, uint64, error) {
+func (b *BencodeParser) acceptInt(buf []byte, i uint64) (uint64, uint64, error) {
 	if i >= uint64(len(buf)) || string(buf[i]) != "i" {
 		return 0, 0, fmt.Errorf("unable to parse int")
 	}
@@ -187,13 +187,13 @@ func (b *BencodeParser) parseInt(buf []byte, i uint64) (uint64, uint64, error) {
 	}
 	convertedRes, err := strconv.Atoi(res)
 	if err != nil {
-		return 0, 0, fmt.Errorf("unable to convert result into number, parseInt func (b *BencodeTorrent)tion logic probably the cause")
+		return 0, 0, fmt.Errorf("unable to convert result into number, acceptInt func (b *BencodeTorrent)tion logic probably the cause")
 	}
 	return uint64(convertedRes), uint64(i + 1), nil
 }
 
 // retruns (string value, index of end of string)
-func (b *BencodeParser) parseString(buf []byte, i uint64) (string, uint64, error) {
+func (b *BencodeParser) acceptString(buf []byte, i uint64) (string, uint64, error) {
 	stringLength, strIndex, err := b.getStringLength(buf, i)
 	if err != nil {
 		return "", 0, fmt.Errorf("unable to parse string length - %s", err)
