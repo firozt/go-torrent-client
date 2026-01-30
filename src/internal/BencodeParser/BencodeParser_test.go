@@ -26,7 +26,7 @@ func TestParseString(t *testing.T) {
 	for _, tc := range testcase {
 		t.Run(tc.testName, func(t *testing.T) {
 			p := MakeBencodeParser()
-			gotString, gotStart, _ := p.parseString([]byte(tc.input), 0)
+			gotString, gotStart, _ := p.acceptString([]byte(tc.input), 0)
 			if gotString != tc.expectedString {
 				t.Errorf("Incorrect string value, got %s wanted %s\n", gotString, tc.expectedString)
 			}
@@ -97,7 +97,7 @@ func TestParseInt(t *testing.T) {
 	for _, tc := range testcase {
 		t.Run(tc.testName, func(t *testing.T) {
 			p := MakeBencodeParser()
-			got, gotEndIndex, err := p.parseInt([]byte(tc.input), 0)
+			got, gotEndIndex, err := p.acceptInt([]byte(tc.input), 0)
 
 			if tc.throwsError && err == nil {
 				t.Errorf("Expected an error did not recieve any")
