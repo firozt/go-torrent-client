@@ -1,6 +1,6 @@
 # Go Torrent Client
 A bit-torrent client able to parse, download and validate files given a .torrent file, all controlable from the terminal using the TUI framework Bubbletea. 
-This implementation will follow the bit-torrent specification defined [here](https://wiki.theory.org/BitTorrentSpecification)
+This implementation will follow the bit-torrent specification defined [here](https://wiki.theory.org/BitTorrentSpecification).
 
 ## Contents
 
