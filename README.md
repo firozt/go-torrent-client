@@ -21,9 +21,8 @@ even does this very thing. However none exist for Go so I wrote everything by ha
 parsing buffer by buffer, whilst maintaining state between buffer changes. This is important as as the file grows the number of pieces (field in bencode data
 will also grow)
 
-<br>
 Many state variables are maintaied throughout parsing defined by the BencodeParser struct below
-```
+```go
 
 type BencodeParser struct {
 	numDictsInInfoParsed int8 // number of dict value's parsed within the info key, used to understand when we are not in info anymore
