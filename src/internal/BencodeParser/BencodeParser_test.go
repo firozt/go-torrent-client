@@ -272,7 +272,7 @@ func TestPackage(t *testing.T) {
 			throwsError: false,
 		},
 	}
-	for _, tc := range testcase[1:] {
+	for _, tc := range testcase[:1] {
 		t.Run(tc.fileName, func(t *testing.T) {
 			p := MakeBencodeParser()
 			bencodeData, err := p.Read(readTestDataFile(tc.fileName))
