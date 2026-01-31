@@ -9,7 +9,7 @@ Uses a recursive descent algorithm to parse each token and assign them to a key 
 The parser first forms an intermediate representation of the data in the form `map[string]anY` as bencode data can carry
 any number of potential fields, all non essential fields will be ignore (essential fields being ones defined in the BencodeTorrent struct)
 To create the general structure for this package I created a Context Free Grammar to represent the parsing shown below  
-```
+```ANTLR
 value   -> integer | string | list | dict 
 integer -> "i" int "e"
 string  -> length ":" bytes
