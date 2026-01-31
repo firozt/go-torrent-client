@@ -46,32 +46,40 @@ func MakeBencodeParser() *BencodeParser {
 	}
 }
 
-// gets the current token value and returns it,
-// may return EOF error if index doesnt exist
-// destructive process, increments current index by 1
-// handles EOB
-func (b *BencodeParser) consumeToken() (byte, error) {
+func (b *BencodeParser) bufIdxCheckAndHandle() error {
 	// Refill buffer if we've reached the end
 	if b.cur_idx >= b.buf_len {
 
 		// primarily for testing
 		if b.reader == nil {
-			return 0x00, EOF
+			return EOF
 		}
 
 		n, err := (*b.reader).Read(b.buf)
 		if err != nil {
-			return 0x00, EOF
+			return EOF
 		}
 		if n == 0 {
 			// Prevent panic if reader returned 0 bytes but no error
-			return 0x00, EOF
+			return EOF
 		}
 		b.buf_len = uint64(n)
 		b.cur_idx = 0
 	}
 
+	return nil
+}
+
+// gets the current token value and returns it,
+// may return EOF error if index doesnt exist
+// destructive process, increments current index by 1
+// handles EOB
+func (b *BencodeParser) consumeToken() (byte, error) {
 	// Safe access because buf_len > 0 and cur_idx < buf_len
+
+	if err := b.bufIdxCheckAndHandle(); err != nil {
+		return 0x00, err
+	}
 
 	res := b.buf[b.cur_idx]
 
@@ -87,7 +95,9 @@ func (b *BencodeParser) consumeToken() (byte, error) {
 // does not mutate any values
 // returns EOF error
 func (b *BencodeParser) peekToken() (byte, error) {
-	// TODO: handle EOB
+	if err := b.bufIdxCheckAndHandle(); err != nil {
+		return 0x00, err
+	}
 	return b.buf[b.cur_idx], nil
 }
 
@@ -140,7 +150,7 @@ func (b *BencodeParser) IRToBencode(ir map[string]any, data *BencodeTorrent) {
 func prettyPrintMap(x map[string]any) {
 	bc, err := json.MarshalIndent(x, "", "  ")
 	if err != nil {
-		fmt.Println("error:", err)
+		// fmt.PrintLn("error:", err)
 	}
 	fmt.Print(string(bc))
 }
@@ -162,23 +172,23 @@ func (b *BencodeParser) unmarshal(data *BencodeTorrent) error {
 }
 
 func (b *BencodeParser) parseValue() (any, error) {
-	fmt.Printf("Attempting to parse key %s and index %d\n", string(b.buf[b.cur_idx]), b.cur_idx)
+	// fmt.Printf("Attempting to parse key %s and index %d\n", string(b.buf[b.cur_idx]), b.cur_idx)
 	if b.cur_idx >= uint64(len(b.buf)) {
 		return nil, fmt.Errorf("index out of range of b.ffer")
 	}
 
 	switch string(b.buf[b.cur_idx]) {
 	case "i": // int
-		fmt.Println("Parsing int")
+		// fmt.PrintLn("Parsing int")
 		return b.acceptInt()
 	case "0", "1", "2", "3", "4", "5", "6", "7", "8", "9": // string
-		fmt.Println("Parsing string")
+		// fmt.PrintLn("Parsing string")
 		return b.acceptString()
 	case "d": // dict (map[string]any)
-		fmt.Println("Parsing dict")
+		// fmt.PrintLn("Parsing dict")
 		return b.acceptDict()
 	case "l": // list ([]any)
-		fmt.Println("Parsing List")
+		// fmt.PrintLn("Parsing List")
 		return b.acceptList()
 	default:
 		return nil, fmt.Errorf("could not find a suitable accept type for %s at index %d", string(b.buf[b.cur_idx]), b.cur_idx)
@@ -246,7 +256,7 @@ func (b *BencodeParser) acceptDict() (map[string]any, error) {
 }
 
 func (b *BencodeParser) acceptList() ([]any, error) {
-	var resList []any
+	resList := make([]any, 0)
 	curval, consumeErr := b.consumeToken()
 	// check consume error
 	if consumeErr != nil {
@@ -258,13 +268,14 @@ func (b *BencodeParser) acceptList() ([]any, error) {
 	}
 	// start parsing value bytes
 	for {
-		curval, consumeErr = b.consumeToken()
+		curval, peekErr := b.peekToken()
 		// consume err check
-		if consumeErr != nil {
-			return resList, consumeErr
+		if peekErr != nil {
+			return resList, peekErr
 		}
 		// finished parsing
 		if string(curval) == "e" {
+			b.consumeToken() // get next token, cant throw error as we know e exists
 			break
 		}
 		// valid parse value

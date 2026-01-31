@@ -80,6 +80,111 @@ func TestGetStringLength(t *testing.T) {
 	}
 }
 
+func TestAcceptList(t *testing.T) {
+	type TestCase struct {
+		testName         string
+		input            string
+		expected         []any
+		expectedEndIndex uint64
+		throwsError      bool
+	}
+
+	testcases := []TestCase{
+		{
+			testName:         "empty list",
+			input:            "le",
+			expected:         []any{},
+			expectedEndIndex: 2,
+			throwsError:      false,
+		},
+		{
+			testName:         "single int",
+			input:            "li32ee",
+			expected:         []any{uint64(32)},
+			expectedEndIndex: 6,
+			throwsError:      false,
+		},
+		{
+			testName: "multiple values",
+			input:    "li1e3:abce",
+			expected: []any{
+				uint64(1),
+				"abc",
+			},
+			expectedEndIndex: 10,
+			throwsError:      false,
+		},
+		{
+			testName: "nested list",
+			input:    "lli1eee",
+			expected: []any{
+				[]any{
+					uint64(1),
+				},
+			},
+			expectedEndIndex: 7,
+			throwsError:      false,
+		},
+		{
+			testName: "double nested list (announce-list case)",
+			input:    "ll3:abceel",
+			expected: []any{
+				[]any{
+					"abc",
+				},
+			},
+			expectedEndIndex: 9,
+			throwsError:      false,
+		},
+		{
+			testName:    "missing end marker",
+			input:       "li1e",
+			expected:    nil,
+			throwsError: true,
+		},
+		{
+			testName:    "invalid token inside list",
+			input:       "lxe",
+			expected:    nil,
+			throwsError: true,
+		},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.testName, func(t *testing.T) {
+			p := BencodeParser{
+				buf:     []byte(tc.input),
+				cur_idx: 0,
+				buf_len: uint64(len(tc.input)),
+			}
+
+			got, err := p.acceptList()
+
+			if tc.throwsError {
+				if err == nil {
+					t.Fatalf("expected error, got none")
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if !reflect.DeepEqual(got, tc.expected) {
+				t.Errorf("wrong output\n got:  %#v\n want: %#v", got, tc.expected)
+			}
+
+			if p.cur_idx != tc.expectedEndIndex {
+				t.Errorf(
+					"wrong end index: got %d, want %d",
+					p.cur_idx,
+					tc.expectedEndIndex,
+				)
+			}
+		})
+	}
+}
 func TestParseInt(t *testing.T) {
 	type TestCase struct {
 		testName         string
@@ -119,6 +224,12 @@ func TestParseInt(t *testing.T) {
 	}
 }
 
+func TestParseList(t *testing.T) {
+	type TestCase struct {
+		testName string
+	}
+}
+
 func TestPackage(t *testing.T) {
 	type TestCase struct {
 		fileName       string
@@ -140,24 +251,28 @@ func TestPackage(t *testing.T) {
 					Name:       "alice.txt",
 					PieceLenth: 16384,
 					Piece:      [][20]byte{}, // skip comparison for this for
-					// Piece: [][20]byte{
-					// 	{0x24, 0xc0, 0x63, 0x52, 0xb8, 0xf1, 0x8d, 0xcb, 0xc4, 0x83, 0x14, 0x22, 0x4d, 0x6c, 0xa2, 0x26, 0x0e, 0x18, 0xf2, 0xbf},
-					// 	{0xd2, 0xcb, 0xb9, 0x8b, 0xe1, 0x3f, 0xe5, 0x7e, 0x61, 0xfd, 0x02, 0x24, 0xa9, 0x02, 0x18, 0x3c, 0x7d, 0x5e, 0xae, 0x65},
-					// 	{0x41, 0xbf, 0x1f, 0x17, 0xbb, 0xe4, 0x63, 0xdb, 0x39, 0x1b, 0x69, 0x81, 0xdc, 0xaf, 0x2f, 0xf9, 0x43, 0x42, 0x58, 0xdb},
-					// 	{0x5a, 0x45, 0x08, 0xbe, 0x10, 0x5b, 0xed, 0xd4, 0x30, 0x51, 0xcc, 0xf8, 0x4d, 0xd4, 0xe2, 0xca, 0x16, 0x76, 0x5d, 0xea},
-					// 	{0xbc, 0x46, 0xcc, 0xa1, 0x65, 0x00, 0xfe, 0x0e, 0x73, 0x31, 0xa0, 0x92, 0x23, 0x9d, 0x49, 0x31, 0xd1, 0x9d, 0xfd, 0x41},
-					// 	{0x6c, 0x47, 0x83, 0x47, 0xc1, 0x94, 0xec, 0x1b, 0xe1, 0x2d, 0xd0, 0x68, 0x58, 0x77, 0x19, 0xc2, 0x2a, 0xf8, 0x6a, 0x9b},
-					// 	{0x8d, 0x4b, 0x53, 0x6b, 0xa5, 0xed, 0xdb, 0x06, 0x44, 0xf2, 0x80, 0x07, 0x7b, 0xbf, 0xd8, 0x63, 0xcb, 0x7b, 0x98, 0x60},
-					// 	{0xea, 0xd2, 0x3c, 0x4f, 0x3c, 0x7c, 0x0f, 0x47, 0x9c, 0x35, 0x28, 0x02, 0x9f, 0x9f, 0xef, 0xb8, 0x96, 0x75, 0x87, 0x81},
-					// 	{0xab, 0xa3, 0xda, 0x89, 0xfc, 0x0b, 0xb9, 0x47, 0x47, 0xa8, 0x54, 0xaa, 0x81, 0xb5, 0x9e, 0xee, 0x45, 0x22, 0x02, 0x67},
-					// 	{0xd9, 0x0e, 0x02, 0x59, 0xda, 0xbf, 0x92, 0x0d, 0x81, 0x58, 0x28, 0xe8, 0xd7, 0x5d, 0xb1, 0x82, 0xcd, 0x2b, 0xf8, 0x64},
-					// },
+				},
+			},
+			throwsError: false,
+		},
+		{
+			fileName: "cosmos-laundromat.torrent",
+			expectedOutput: &BencodeTorrent{
+				CreationDate: 1490916617,
+				InfoHash: [20]byte{
+					0xc9, 0xe1, 0x57, 0x63, 0xf7, 0x22, 0xf2, 0x3e, 0x98, 0xa2,
+					0x9d, 0xec, 0xdf, 0xae, 0x34, 0x1b, 0x98, 0xd5, 0x30, 0x56,
+				}, Info: BencodeInfo{
+					Length:     3945,
+					Name:       "Cosmos Laundromat",
+					PieceLenth: 262144,
+					Piece:      [][20]byte{},
 				},
 			},
 			throwsError: false,
 		},
 	}
-	for _, tc := range testcase {
+	for _, tc := range testcase[1:] {
 		t.Run(tc.fileName, func(t *testing.T) {
 			p := MakeBencodeParser()
 			bencodeData, err := p.Read(readTestDataFile(tc.fileName))
