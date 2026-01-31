@@ -272,6 +272,63 @@ func TestPackage(t *testing.T) {
 			},
 			throwsError: false,
 		},
+		{
+			fileName: "big-buck-bunny.torrent",
+			expectedOutput: &BencodeTorrent{
+				Announce:     "udp://tracker.leechers-paradise.org:6969",
+				CreationDate: 1490916601,
+				InfoHash: [20]byte{
+					//
+					0xdd, 0x82, 0x55, 0xec, 0xdc, 0x7c, 0xa5, 0x5f,
+					0xb0, 0xbb, 0xf8, 0x13, 0x23, 0xd8, 0x70, 0x62,
+					0xdb, 0x1f, 0x6d, 0x1c,
+				}, Info: BencodeInfo{
+					Length:     0,
+					Name:       "Big Buck Bunny",
+					PieceLenth: 262144,
+					Piece:      [][20]byte{},
+				},
+			},
+			throwsError: false,
+		},
+		{
+			fileName: "sintel.torrent",
+			expectedOutput: &BencodeTorrent{
+				Announce:     "udp://tracker.leechers-paradise.org:6969",
+				CreationDate: 1490916637,
+				InfoHash: [20]byte{
+					0x08, 0xad, 0xa5, 0xa7, 0xa6, 0x18, 0x3a, 0xae,
+					0x1e, 0x09, 0xd8, 0x31, 0xdf, 0x67, 0x48, 0xd5,
+					0x66, 0x09, 0x5a, 0x10,
+				},
+				Info: BencodeInfo{
+					Length:     0,
+					Name:       "Sintel",
+					PieceLenth: 131072,
+					Piece:      [][20]byte{},
+				},
+			},
+			throwsError: false,
+		},
+		{
+			fileName: "wired-cd.torrent",
+			expectedOutput: &BencodeTorrent{
+				Announce:     "udp://tracker.leechers-paradise.org:6969",
+				CreationDate: 1490916588,
+				InfoHash: [20]byte{
+					0xa8, 0x8f, 0xda, 0x59, 0x54, 0xe8, 0x91, 0x78,
+					0xc3, 0x72, 0x71, 0x6a, 0x6a, 0x78, 0xb8, 0x18,
+					0x0e, 0xd4, 0xda, 0xd3,
+				},
+				Info: BencodeInfo{
+					Length:     0,
+					Name:       "The WIRED CD - Rip. Sample. Mash. Share",
+					PieceLenth: 65536,
+					Piece:      [][20]byte{},
+				},
+			},
+			throwsError: false,
+		},
 	}
 	for _, tc := range testcase {
 		t.Run(tc.fileName, func(t *testing.T) {
