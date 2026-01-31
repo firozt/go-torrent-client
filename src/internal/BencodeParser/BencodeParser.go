@@ -24,12 +24,13 @@ type BencodeTorrent struct {
 }
 
 type BencodeParser struct {
-	infoDictDepth int8
-	infoBytes     []byte // holds all the bytes of the info dict
-	buf           []byte
-	buf_len       uint64
-	cur_idx       uint64
-	reader        *io.Reader
+	numDictsInInfoParsed int8
+	captureBytes         bool
+	infoBytes            []byte // holds all the bytes of the info dict
+	buf                  []byte
+	buf_len              uint64
+	cur_idx              uint64
+	reader               *io.Reader
 }
 
 // == Error definitions == //
@@ -40,9 +41,9 @@ var EOF = fmt.Errorf("End of file error")
 
 func MakeBencodeParser() *BencodeParser {
 	return &BencodeParser{
-		infoDictDepth: -1,
-		infoBytes:     []byte{},
-		buf:           make([]byte, 1024),
+		numDictsInInfoParsed: -1,
+		infoBytes:            []byte{},
+		buf:                  make([]byte, 1024),
 	}
 }
 
@@ -83,7 +84,7 @@ func (b *BencodeParser) consumeToken() (byte, error) {
 
 	res := b.buf[b.cur_idx]
 
-	if b.infoDictDepth >= 0 {
+	if b.captureBytes {
 		b.infoBytes = append(b.infoBytes, res)
 	}
 
@@ -155,11 +156,6 @@ func prettyPrintMap(x map[string]any) {
 	fmt.Print(string(bc))
 }
 
-// structure of bencode data
-// objects -> d e
-// integer -> i e
-// strings -> {length}:{string literal}
-// lists -> 	l e
 func (b *BencodeParser) unmarshal(data *BencodeTorrent) error {
 
 	IRData, err := b.parseValue()
@@ -209,6 +205,11 @@ func (b *BencodeParser) acceptDict() (map[string]any, error) {
 		return res, fmt.Errorf("Unable to parse dicitonary expected initial token 'd' however got %s\n", string(curval))
 	}
 
+	isFirst := b.numDictsInInfoParsed == 0
+	if b.numDictsInInfoParsed >= 0 { // is first dict in info
+		b.numDictsInInfoParsed++
+	}
+
 	// can now parse dict bytes
 	numParsed := 0
 	lastKey := ""
@@ -220,9 +221,6 @@ func (b *BencodeParser) acceptDict() (map[string]any, error) {
 		}
 		if string(curval) == "e" {
 			b.consumeToken() // get ready for next parse
-			if b.infoDictDepth >= 0 {
-				b.infoDictDepth--
-			}
 			break
 		}
 
@@ -245,12 +243,16 @@ func (b *BencodeParser) acceptDict() (map[string]any, error) {
 
 		} else { // is a value
 			// check if inside info, and check if its a dict if so increment depth
-			if _, ok := value.(map[string]any); ok && b.infoDictDepth >= 0 {
-				b.infoDictDepth++
+			if _, ok := value.(map[string]any); ok && b.numDictsInInfoParsed >= 0 {
+				b.numDictsInInfoParsed++
 			}
 			res[lastKey] = value
 		}
 		numParsed++
+	}
+	// if we are in info, decrement cause were are returning
+	if isFirst {
+		b.captureBytes = false
 	}
 	return res, nil
 }
@@ -362,7 +364,8 @@ func (b *BencodeParser) acceptString() (string, error) {
 	}
 
 	if res == "info" {
-		b.infoDictDepth = 0 // in info key but 0 depth, waiting for dict value
+		b.numDictsInInfoParsed = 0 // in info key but 0 depth, waiting for dict value
+		b.captureBytes = true
 	}
 	// cur token should now be start of next item
 	return res, nil

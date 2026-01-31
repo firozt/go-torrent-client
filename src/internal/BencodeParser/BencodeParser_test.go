@@ -259,11 +259,12 @@ func TestPackage(t *testing.T) {
 			fileName: "cosmos-laundromat.torrent",
 			expectedOutput: &BencodeTorrent{
 				CreationDate: 1490916617,
+				Announce:     "udp://tracker.leechers-paradise.org:6969",
 				InfoHash: [20]byte{
 					0xc9, 0xe1, 0x57, 0x63, 0xf7, 0x22, 0xf2, 0x3e, 0x98, 0xa2,
 					0x9d, 0xec, 0xdf, 0xae, 0x34, 0x1b, 0x98, 0xd5, 0x30, 0x56,
 				}, Info: BencodeInfo{
-					Length:     3945,
+					Length:     0,
 					Name:       "Cosmos Laundromat",
 					PieceLenth: 262144,
 					Piece:      [][20]byte{},
@@ -272,7 +273,7 @@ func TestPackage(t *testing.T) {
 			throwsError: false,
 		},
 	}
-	for _, tc := range testcase[:1] {
+	for _, tc := range testcase {
 		t.Run(tc.fileName, func(t *testing.T) {
 			p := MakeBencodeParser()
 			bencodeData, err := p.Read(readTestDataFile(tc.fileName))
