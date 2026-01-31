@@ -21,3 +21,17 @@ even does this very thing. However none exist for Go so I wrote everything by ha
 parsing buffer by buffer, whilst maintaining state between buffer changes. This is important as as the file grows the number of pieces (field in bencode data
 will also grow)
 
+<br>
+Many state variables are maintaied throughout parsing defined by the BencodeParser struct below
+```
+
+type BencodeParser struct {
+	numDictsInInfoParsed int8 // number of dict value's parsed within the info key, used to understand when we are not in info anymore
+	captureBytes         bool // tells the parser when to capture bytes for info_hash calculation
+	infoBytes            []byte // holds all the bytes of the info dict
+	buf                  []byte // buffer data
+	buf_len              uint64 // number of actual data within buffer
+	cur_idx              uint64 // current reading index within buffer
+	reader               *io.Reader // reader of datasource (passed with Read call)
+}
+```
