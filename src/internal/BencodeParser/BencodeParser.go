@@ -24,8 +24,8 @@ type BencodeTorrent struct {
 }
 
 type BencodeParser struct {
-	numDictsInInfoParsed int8
-	captureBytes         bool
+	numDictsInInfoParsed int8   // number of dict value's parsed within the info key, used to understand when we are not in info anymore
+	captureBytes         bool   // tells the parser when to capture bytes for info_hash calculation
 	infoBytes            []byte // holds all the bytes of the info dict
 	buf                  []byte
 	buf_len              uint64
@@ -291,26 +291,6 @@ func (b *BencodeParser) acceptList() ([]any, error) {
 	}
 
 	return resList, nil
-
-	// var resList []any
-	// if len(b.buf) < 1 || string(b.buf[b.cur_idx]) != "l" {
-	// 	return resList, fmt.Errorf("invalid accept type of list has been chosen")
-	// }
-	// b.cur_idx++
-	//
-	// for b.cur_idx < uint64(len(b.buf)) {
-	// 	if string(b.buf[b.cur_idx]) == "e" {
-	// 		break
-	// 	}
-	// 	value, err := b.parseValue()
-	// 	if err != nil {
-	// 		return resList, fmt.Errorf("unable to parse list - %s", err)
-	// 	}
-	//
-	// 	resList = append(resList, value)
-	// }
-	//
-	// return resList, nil
 }
 
 func (b *BencodeParser) acceptInt() (uint64, error) {
