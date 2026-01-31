@@ -29,11 +29,14 @@ type BencodeParser struct {
 	buf         []byte
 	buf_len     uint64
 	cur_idx     uint64
+	reader      *io.Reader
 }
 
 // == Error definitions == //
 
+var PARSE_ERR = fmt.Errorf("Parsing error")
 var EOB = fmt.Errorf("end of b.ffer error")
+var EOF = fmt.Errorf("End of file error")
 
 func MakeBencodeParser() *BencodeParser {
 	return &BencodeParser{
@@ -43,22 +46,75 @@ func MakeBencodeParser() *BencodeParser {
 	}
 }
 
+// gets the current token value and returns it,
+// may return EOF error if index doesnt exist
+// destructive process, increments current index by 1
+// handles EOB
+func (b *BencodeParser) consumeToken() (byte, error) {
+	// Refill buffer if we've reached the end
+	if b.cur_idx >= b.buf_len {
+
+		// primarily for testing
+		if b.reader == nil {
+			return 0x00, EOF
+		}
+
+		n, err := (*b.reader).Read(b.buf)
+		if err != nil {
+			return 0x00, EOF
+		}
+		if n == 0 {
+			// Prevent panic if reader returned 0 bytes but no error
+			return 0x00, EOF
+		}
+		b.buf_len = uint64(n)
+		b.cur_idx = 0
+	}
+
+	// Safe access because buf_len > 0 and cur_idx < buf_len
+
+	res := b.buf[b.cur_idx]
+
+	if b.InInfoField {
+		b.infoBytes = append(b.infoBytes, res)
+	}
+
+	b.cur_idx++
+	return res, nil
+}
+
+// peeks at current index
+// does not mutate any values
+// returns EOF error
+func (b *BencodeParser) peekToken() (byte, error) {
+	// TODO: handle EOB
+	return b.buf[b.cur_idx], nil
+}
+
 func (b *BencodeParser) Read(reader io.Reader) (*BencodeTorrent, error) {
 	var torrent BencodeTorrent
+	b.reader = &reader
+	n, err := reader.Read(b.buf)
 
-	for {
-		n, err := reader.Read(b.buf)
-		if n > 0 {
-			b.buf_len = uint64(n)
-			b.unmarshal(&torrent)
-		}
-		if err != nil {
-			if err == io.EOF {
-				break
-			}
-			return nil, err
-		}
+	if err != nil {
+		return nil, err
 	}
+	b.buf_len = uint64(n)
+	b.unmarshal(&torrent)
+
+	// for {
+	// 	n, err := reader.Read(b.buf)
+	// 	if n > 0 {
+	// 		b.buf_len = uint64(n)
+	// 		b.unmarshal(&torrent)
+	// 	}
+	// 	if err != nil {
+	// 		if err == io.EOF {
+	// 			break
+	// 		}
+	// 		return nil, err
+	// 	}
+	// }
 
 	return &torrent, nil
 }
@@ -96,7 +152,7 @@ func prettyPrintMap(x map[string]any) {
 // lists -> 	l e
 func (b *BencodeParser) unmarshal(data *BencodeTorrent) error {
 
-	IRData, _, err := b.parseValue()
+	IRData, err := b.parseValue()
 	if err != nil {
 		log.Fatalf("Unable to parse bencode raw data - %s", err)
 	}
@@ -105,148 +161,221 @@ func (b *BencodeParser) unmarshal(data *BencodeTorrent) error {
 	return nil
 }
 
-func (b *BencodeParser) parseValue() (any, uint64, error) {
+func (b *BencodeParser) parseValue() (any, error) {
+	fmt.Printf("Attempting to parse key %s and index %d\n", string(b.buf[b.cur_idx]), b.cur_idx)
 	if b.cur_idx >= uint64(len(b.buf)) {
-		return nil, 0, fmt.Errorf("index out of range of b.ffer")
+		return nil, fmt.Errorf("index out of range of b.ffer")
 	}
 
 	switch string(b.buf[b.cur_idx]) {
 	case "i": // int
+		fmt.Println("Parsing int")
 		return b.acceptInt()
 	case "0", "1", "2", "3", "4", "5", "6", "7", "8", "9": // string
+		fmt.Println("Parsing string")
 		return b.acceptString()
 	case "d": // dict (map[string]any)
+		fmt.Println("Parsing dict")
 		return b.acceptDict()
 	case "l": // list ([]any)
+		fmt.Println("Parsing List")
 		return b.acceptList()
 	default:
-		return nil, 0, fmt.Errorf("could not find a suitable accept type for %s at index %d", string(b.buf[b.cur_idx]), b.cur_idx)
+		return nil, fmt.Errorf("could not find a suitable accept type for %s at index %d", string(b.buf[b.cur_idx]), b.cur_idx)
 	}
 }
 
-// TODO: Add logic to append if err = EOB error
-func (b *BencodeParser) acceptDict() (map[string]any, uint64, error) {
+func (b *BencodeParser) acceptDict() (map[string]any, error) {
 	res := make(map[string]any)
 
-	if b.cur_idx >= uint64(len(b.buf)) || string(b.buf[b.cur_idx]) != "d" {
-		return res, 0, fmt.Errorf("unable to parse dict")
+	curval, consumeErr := b.consumeToken()
+	// consume err check
+	if consumeErr != nil {
+		return res, consumeErr
 	}
-	numParsedFields := 0
-	startIdx := b.cur_idx
-	lastField := ""
-	b.cur_idx++
 
-	for b.cur_idx < uint64(len(b.buf)) {
-		if string(b.buf[b.cur_idx]) == "e" {
+	// check if valid call of acceptDict()
+	if string(curval) != "d" {
+		return res, fmt.Errorf("Unable to parse dicitonary expected initial token 'd' however got %s\n", string(curval))
+	}
+
+	// can now parse dict bytes
+	numParsed := 0
+	lastKey := ""
+	for {
+		curval, peekError := b.peekToken()
+		if peekError != nil {
+			return res, nil
+
+		}
+		if string(curval) == "e" {
+			b.consumeToken() // get ready for next parse
 			if b.InInfoField {
 				b.InInfoField = false
-				b.infoBytes = append(b.infoBytes, b.buf[startIdx:b.cur_idx+1]...) // include cur 'e' byte
 			}
 			break
 		}
-		value, newIdx, err := b.parseValue()
-		if err != nil {
-			return map[string]any{}, 0, fmt.Errorf("unable to parse dict - %s", err)
+
+		value, valueErr := b.parseValue()
+
+		// check value err
+		if valueErr != nil {
+			return res, valueErr
 		}
-		if numParsedFields%2 == 0 { // is a key
-			strVal, ok := value.(string)
+
+		// is a string
+		if numParsed%2 == 0 {
+			// must be of type string
+			s, ok := value.(string)
+
 			if !ok {
-				return res, 0, fmt.Errorf("unable to parse bencode, key is not of type string")
+				return res, fmt.Errorf("Key is not of type string invalid bencode")
 			}
-			lastField = strVal
+			lastKey = s
+
 		} else { // is a value
-			res[lastField] = value
+			res[lastKey] = value
 		}
-		b.cur_idx = newIdx
-		numParsedFields++
+		numParsed++
 	}
-	return res, b.cur_idx + 1, nil
+	return res, nil
 }
 
-func (b *BencodeParser) acceptList() ([]any, uint64, error) {
+func (b *BencodeParser) acceptList() ([]any, error) {
 	var resList []any
-	if len(b.buf) < 1 || string(b.buf[b.cur_idx]) != "l" {
-		return resList, 0, fmt.Errorf("invalid accept type of list has been chosen")
+	curval, consumeErr := b.consumeToken()
+	// check consume error
+	if consumeErr != nil {
+		return resList, consumeErr
 	}
-	b.cur_idx++
-
-	for b.cur_idx < uint64(len(b.buf)) {
-		if string(b.buf[b.cur_idx]) == "e" {
+	// check if this is a valid call of acceptList()
+	if string(curval) != "l" {
+		return resList, fmt.Errorf("unable to parse list, initial char is not an 'l'\n")
+	}
+	// start parsing value bytes
+	for {
+		curval, consumeErr = b.consumeToken()
+		// consume err check
+		if consumeErr != nil {
+			return resList, consumeErr
+		}
+		// finished parsing
+		if string(curval) == "e" {
 			break
 		}
-		value, newIndex, err := b.parseValue()
-		if err != nil {
-			return resList, 0, fmt.Errorf("unable to parse list - %s", err)
+		// valid parse value
+		value, valueErr := b.parseValue()
+
+		if valueErr != nil {
+			return resList, valueErr
 		}
 
 		resList = append(resList, value)
-		b.cur_idx = newIndex
 	}
 
-	return resList, b.cur_idx + 1, nil
+	return resList, nil
+
+	// var resList []any
+	// if len(b.buf) < 1 || string(b.buf[b.cur_idx]) != "l" {
+	// 	return resList, fmt.Errorf("invalid accept type of list has been chosen")
+	// }
+	// b.cur_idx++
+	//
+	// for b.cur_idx < uint64(len(b.buf)) {
+	// 	if string(b.buf[b.cur_idx]) == "e" {
+	// 		break
+	// 	}
+	// 	value, err := b.parseValue()
+	// 	if err != nil {
+	// 		return resList, fmt.Errorf("unable to parse list - %s", err)
+	// 	}
+	//
+	// 	resList = append(resList, value)
+	// }
+	//
+	// return resList, nil
 }
 
-func (b *BencodeParser) acceptInt() (uint64, uint64, error) {
-	if b.cur_idx >= uint64(len(b.buf)) || string(b.buf[b.cur_idx]) != "i" {
-		return 0, 0, fmt.Errorf("unable to parse int")
+func (b *BencodeParser) acceptInt() (uint64, error) {
+	// Expect initial 'i'
+	cur, err := b.consumeToken()
+	if err != nil || cur != 'i' {
+		return 0, fmt.Errorf("expected 'i' at start of integer")
 	}
-	b.cur_idx++
-	res := ""
-	for string(b.buf[b.cur_idx]) != "e" {
-		if b.cur_idx >= uint64(len(b.buf)) { // EOB, potnetially more data and may be valid, try recover
 
-		}
-		digit, err := isDigit(b.buf[b.cur_idx])
+	// break if EOF, recieve 'e' or unparasable integer digit
+	var num uint64
+	for {
+		cur, err = b.consumeToken()
+
 		if err != nil {
-			return 0, 0, fmt.Errorf("invalid Bencode, cannot parse integer there is a non e terminating character %s", string(b.buf[b.cur_idx]))
+			return 0, EOF
 		}
-		res += strconv.FormatUint(digit, 10)
-		b.cur_idx++
+		if cur == 'e' {
+			break // end of integer
+		}
+
+		digit, err := isDigit(cur)
+		if err != nil {
+			return 0, fmt.Errorf("invalid character '%c' in integer", cur)
+		}
+
+		num = num*10 + digit
 	}
 
-	convertedRes, err := strconv.Atoi(res)
-	if err != nil {
-		return 0, 0, fmt.Errorf("unable to convert result into number, acceptInt func (b *BencodeTorrent)tion logic prob.y the cause")
-	}
-	return uint64(convertedRes), uint64(b.cur_idx + 1), nil
+	return num, nil
 }
 
 // retruns (string value, index of end of string)
-func (b *BencodeParser) acceptString() (string, uint64, error) {
-	stringLength, strIndex, err := b.getStringLength()
+func (b *BencodeParser) acceptString() (string, error) {
+	// get string length parsed
+	stringLength, err := b.getStringLength()
 	if err != nil {
-		return "", 0, fmt.Errorf("unable to parse string length - %s", err)
-	}
-	if strIndex+stringLength > uint64(len(b.buf)) {
-		log.Fatalf("HAVE NOT IMPLEMENTED NEXT b.fFER HANDLING")
-		// TODO: implement logic to parse next b.ffer also
+		return "", fmt.Errorf("unable to parse string length - %s", err)
 	}
 
-	parsedStringValue := string(b.buf[strIndex : strIndex+stringLength])
-	if parsedStringValue == "info" {
+	// cur token should now be start of the string
+	res := ""
+
+	// we know how long to scan for, only error can be EOF
+	for i := 0; i < int(stringLength); i++ {
+		curval, consumeErr := b.consumeToken()
+		if consumeErr != nil {
+			return "", consumeErr
+		}
+		res += string(curval)
+	}
+
+	if res == "info" {
 		b.InInfoField = true
 	}
-	if parsedStringValue == "piece" {
-	}
-	return parsedStringValue, strIndex + stringLength, nil
+	// cur token should now be start of next item
+	return res, nil
 }
 
-// returns length of the string, index of start of string, error
-func (b *BencodeParser) getStringLength() (uint64, uint64, error) {
+func (b *BencodeParser) getStringLength() (uint64, error) {
 	res := ""
-	for ; b.cur_idx < uint64(len(b.buf)); b.cur_idx++ {
-		digit, err := isDigit((b.buf)[b.cur_idx])
-		if err != nil {
-			break
+	curval, consumeErr := b.consumeToken()
+	for consumeErr == nil {
+		_, digitErr := isDigit(curval)
+		if digitErr != nil {
+			break // non digit number
 		}
-		res += strconv.FormatUint(digit, 10)
+		res += string(curval)
+		curval, consumeErr = b.consumeToken()
 	}
-	strLen, err := strconv.Atoi(res)
-	if b.cur_idx >= uint64(len(b.buf)) || string(b.buf[b.cur_idx]) != ":" {
-		return 0, 0, fmt.Errorf("invalid Bencode, there is no included ':' after the digits at index %d", b.cur_idx)
+
+	// error with consuming next token, typically unexpected EOF
+	if consumeErr != nil {
+		return 0, consumeErr
 	}
-	// +1 for the ":" character after the length and one more for the start of the string
-	return uint64(strLen), (b.cur_idx + 1), err
+
+	// curval is not a digit
+	if string(curval) != ":" {
+		return 0, fmt.Errorf("Unexpected token %s, expected : for end of string length", string(curval))
+	}
+
+	return strconv.ParseUint(res, 10, 64)
 }
 
 func isDigit(c byte) (uint64, error) {

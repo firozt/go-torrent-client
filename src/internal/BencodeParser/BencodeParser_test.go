@@ -30,12 +30,9 @@ func TestParseString(t *testing.T) {
 				cur_idx: 0,
 				buf_len: uint64(len([]byte(tc.input))),
 			}
-			gotString, gotStart, _ := p.acceptString()
+			gotString, _ := p.acceptString()
 			if gotString != tc.expectedString {
 				t.Errorf("Incorrect string value, got %s wanted %s\n", gotString, tc.expectedString)
-			}
-			if gotStart != tc.expectedEndIndex {
-				t.Errorf("Incorrect end index, got %d wanted %d\n", gotStart, tc.expectedEndIndex)
 			}
 		})
 	}
@@ -63,9 +60,9 @@ func TestGetStringLength(t *testing.T) {
 			p := BencodeParser{
 				buf:     []byte(tc.input),
 				cur_idx: 0,
-				buf_len: uint64(len([]byte(tc.input))),
+				buf_len: uint64(len(tc.input)),
 			}
-			gotLength, gotStartOfString, gotError := p.getStringLength()
+			gotLength, gotError := p.getStringLength()
 
 			if tc.throwsError && gotError == nil {
 				t.Errorf("Expected an error didnt recieve one\n")
@@ -78,9 +75,6 @@ func TestGetStringLength(t *testing.T) {
 			}
 			if tc.expectedLength != gotLength {
 				t.Errorf("Invalid parsing of digits, got %d wanted %d\n", gotLength, tc.expectedLength)
-			}
-			if tc.expectedStartOfString != gotStartOfString {
-				t.Errorf("Invalid start of string value got %d wanted %d\n", gotStartOfString, tc.expectedStartOfString)
 			}
 		})
 	}
@@ -110,7 +104,7 @@ func TestParseInt(t *testing.T) {
 				buf_len: uint64(len([]byte(tc.input))),
 			}
 
-			got, gotEndIndex, err := p.acceptInt()
+			got, err := p.acceptInt()
 
 			if tc.throwsError && err == nil {
 				t.Errorf("Expected an error did not recieve any")
@@ -120,9 +114,6 @@ func TestParseInt(t *testing.T) {
 			}
 			if tc.expected != got {
 				t.Errorf("Wrong output got %d wanted %d\n", got, tc.expected)
-			}
-			if tc.expectedEndIndex != gotEndIndex {
-				t.Errorf("Wrong end index got %d wanted %d\n", gotEndIndex, tc.expectedEndIndex)
 			}
 		})
 	}
