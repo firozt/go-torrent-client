@@ -24,12 +24,12 @@ type BencodeTorrent struct {
 }
 
 type BencodeParser struct {
-	InInfoField bool
-	infoBytes   []byte // holds all the bytes of the info dict
-	buf         []byte
-	buf_len     uint64
-	cur_idx     uint64
-	reader      *io.Reader
+	infoDictDepth int8
+	infoBytes     []byte // holds all the bytes of the info dict
+	buf           []byte
+	buf_len       uint64
+	cur_idx       uint64
+	reader        *io.Reader
 }
 
 // == Error definitions == //
@@ -40,9 +40,9 @@ var EOF = fmt.Errorf("End of file error")
 
 func MakeBencodeParser() *BencodeParser {
 	return &BencodeParser{
-		InInfoField: false,
-		infoBytes:   []byte{},
-		buf:         make([]byte, 1024),
+		infoDictDepth: -1,
+		infoBytes:     []byte{},
+		buf:           make([]byte, 1024),
 	}
 }
 
@@ -75,7 +75,7 @@ func (b *BencodeParser) consumeToken() (byte, error) {
 
 	res := b.buf[b.cur_idx]
 
-	if b.InInfoField {
+	if b.infoDictDepth >= 0 {
 		b.infoBytes = append(b.infoBytes, res)
 	}
 
@@ -210,8 +210,8 @@ func (b *BencodeParser) acceptDict() (map[string]any, error) {
 		}
 		if string(curval) == "e" {
 			b.consumeToken() // get ready for next parse
-			if b.InInfoField {
-				b.InInfoField = false
+			if b.infoDictDepth >= 0 {
+				b.infoDictDepth--
 			}
 			break
 		}
@@ -234,6 +234,10 @@ func (b *BencodeParser) acceptDict() (map[string]any, error) {
 			lastKey = s
 
 		} else { // is a value
+			// check if inside info, and check if its a dict if so increment depth
+			if _, ok := value.(map[string]any); ok && b.infoDictDepth >= 0 {
+				b.infoDictDepth++
+			}
 			res[lastKey] = value
 		}
 		numParsed++
@@ -347,7 +351,7 @@ func (b *BencodeParser) acceptString() (string, error) {
 	}
 
 	if res == "info" {
-		b.InInfoField = true
+		b.infoDictDepth = 0 // in info key but 0 depth, waiting for dict value
 	}
 	// cur token should now be start of next item
 	return res, nil
