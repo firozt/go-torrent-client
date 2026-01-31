@@ -1,6 +1,19 @@
 # Go Torrent Client
-This project will try to cover all fundemntals of P2P networking as well as how torrenting works. My aims for this project is to create a fully working torrenting
-client written primarily in the Go programming langugae without the use of any third party libraries.
+A bit-torrent client able to parse, download and validate files given a .torrent file, all controlable from the terminal using the TUI framework Bubbletea
+
+## Contents
+
+- [Project Goals](#project-goals)
+- [Packages](#packages)
+  - [BencodeParser](#bencodeparser-srcinternalbencodeparser)
+
+
+## Project Goals
+The main goals for this project are mostly personal, I want to learn how P2P networking works within Go and as a whole, furthemore how
+parsing is designed and implemented.
+Another area I wanted to delve into for this project is the Bubbletea TUI framework. Furthermore I want to improve my general Go programming
+knowledge being my second project working with the programming language
+
 
 ## Packages
 ### BencodeParser `/src/internal/BencodeParser`  
