@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"math"
 	"strconv"
 )
@@ -42,11 +41,12 @@ var PARSE_ERR = fmt.Errorf("Parsing error")
 var EOB = fmt.Errorf("end of b.ffer error")
 var EOF = fmt.Errorf("End of file error")
 
-func MakeBencodeParser() *BencodeParser {
+func makeBencodeParser(r *io.Reader) *BencodeParser {
 	return &BencodeParser{
 		numDictsInInfoParsed: -1,
 		infoBytes:            []byte{},
 		buf:                  make([]byte, 1024),
+		reader:               r,
 	}
 }
 
@@ -105,7 +105,12 @@ func (b *BencodeParser) peekToken() (byte, error) {
 	return b.buf[b.cur_idx], nil
 }
 
-func (b *BencodeParser) Read(reader io.Reader) (*BencodeTorrent, error) {
+func Read(reader io.Reader) (*BencodeTorrent, error) {
+	if reader == nil {
+		return nil, fmt.Errorf("No reader supplied")
+	}
+
+	b := makeBencodeParser(&reader)
 	var torrent BencodeTorrent
 	b.reader = &reader
 	n, err := reader.Read(b.buf)
@@ -118,7 +123,7 @@ func (b *BencodeParser) Read(reader io.Reader) (*BencodeTorrent, error) {
 	return &torrent, nil
 }
 
-func (b *BencodeParser) IRToBencode(ir map[string]any, data *BencodeTorrent) error {
+func (b *BencodeParser) irToBencode(ir map[string]any, data *BencodeTorrent) error {
 	// Convert IR → struct via JSON (bridge, not ideal but workable)
 	marshalled, err := json.Marshal(ir)
 	if err != nil {
@@ -204,10 +209,10 @@ func (b *BencodeParser) unmarshal(data *BencodeTorrent) error {
 
 	IRData, err := b.parseValue()
 	if err != nil {
-		log.Fatalf("Unable to parse bencode raw data - %s", err)
+		return fmt.Errorf("Unable to parse bencode raw data - %s", err)
 	}
 
-	b.IRToBencode(IRData.(map[string]any), data)
+	b.irToBencode(IRData.(map[string]any), data)
 	return nil
 }
 
@@ -445,7 +450,7 @@ func (b *BencodeParser) getStringLength() (uint64, error) {
 
 	// curval is not a digit
 	if string(curval) != ":" {
-		return 0, fmt.Errorf("Unexpected token %s, expected : for end of string length", string(curval))
+		return 0, fmt.Errorf("Unexpected token %s, expected : for end of string length or digits before this", string(curval))
 	}
 
 	return strconv.ParseUint(res, 10, 64)

@@ -337,8 +337,8 @@ func TestPackage(t *testing.T) {
 	}
 	for _, tc := range testcase {
 		t.Run(tc.fileName, func(t *testing.T) {
-			p := MakeBencodeParser()
-			bencodeData, err := p.Read(readTestDataFile(tc.fileName))
+			r := readTestDataFile(tc.fileName)
+			bencodeData, err := Read(r)
 			if !tc.throwsError && err != nil {
 				t.Errorf("unexpected error thrown by Read - %s\n", err)
 			}
