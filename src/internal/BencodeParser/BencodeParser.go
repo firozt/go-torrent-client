@@ -36,6 +36,7 @@ type BencodeParser struct {
 
 // == Error definitions == //
 
+var NEGATIVE_ZERO_VALUE = fmt.Errorf("A negative zero was parsed, invalid token")
 var INVALID_NEGATIVE_VALUE = fmt.Errorf("A negative number was taken for a non-negative field")
 var PARSE_ERR = fmt.Errorf("Parsing error")
 var EOB = fmt.Errorf("end of b.ffer error")
@@ -336,7 +337,6 @@ func (b *BencodeParser) acceptList() ([]any, error) {
 	return resList, nil
 }
 
-// allow negative numbers
 func (b *BencodeParser) acceptInt() (int64, error) {
 	// Expect initial 'i'
 	cur, err := b.consumeToken()
@@ -344,20 +344,23 @@ func (b *BencodeParser) acceptInt() (int64, error) {
 		return 0, fmt.Errorf("expected 'i' at start of integer")
 	}
 
-	// break if EOF, recieve 'e' or unparasable integer digit
 	isNegative := false
 	var num int64
-	for i := 0; true; i++ {
-		cur, err = b.consumeToken()
+	var digits int
+	leadingZero := false
 
+	for {
+		cur, err = b.consumeToken()
 		if err != nil {
 			return 0, EOF
 		}
+
 		if cur == 'e' {
-			break // end of integer
+			break
 		}
 
-		if i == 0 && string(cur) == "-" {
+		// handle minus sign
+		if digits == 0 && !isNegative && cur == '-' {
 			isNegative = true
 			continue
 		}
@@ -367,11 +370,31 @@ func (b *BencodeParser) acceptInt() (int64, error) {
 			return 0, fmt.Errorf("invalid character '%c' in integer", cur)
 		}
 
+		if digits == 0 && digit == 0 {
+			leadingZero = true
+		} else if leadingZero {
+			// any digit after leading zero is illegal
+			return 0, fmt.Errorf("invalid leading zero in integer")
+		}
+
 		num = num*10 + digit
+		digits++
 	}
+
+	// no digits at all (e.g. "ie" or "i-e")
+	if digits == 0 {
+		return 0, fmt.Errorf("empty integer")
+	}
+
+	// reject -0
+	if isNegative && num == 0 {
+		return 0, NEGATIVE_ZERO_VALUE
+	}
+
 	if isNegative {
-		return num * -1, nil
+		return -num, nil
 	}
+
 	return num, nil
 }
 

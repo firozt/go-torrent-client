@@ -199,6 +199,11 @@ func TestParseInt(t *testing.T) {
 		{"invalid int", "i123x42", 0, 0, true},
 		{"valid 0", "i0e", 0, 3, false},
 		{"invalid contains space", "i3 2e", 0, 0, true},
+		{"negative valid", "i-10e", -10, 5, false},
+		{"negative zero invalid", "i-0e", 0, 0, true},
+		{"leading zeros invalid", "i0012e", 0, 0, true},
+		{"negative leading zeros invalid", "i-002e", 0, 0, true},
+		{"random '-' inside invalid", "i1-2e", 0, 0, true},
 	}
 
 	for _, tc := range testcase {
@@ -215,7 +220,7 @@ func TestParseInt(t *testing.T) {
 				t.Errorf("Expected an error did not recieve any")
 			}
 			if !tc.throwsError && err != nil {
-				t.Errorf("Did not expect to throw an error, however did %s\n", err)
+				t.Errorf("%s: Did not expect to throw an error, however did %s\n", tc.testName, err)
 			}
 			if tc.expected != got {
 				t.Errorf("Wrong output got %d wanted %d\n", got, tc.expected)
