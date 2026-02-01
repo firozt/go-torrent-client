@@ -345,8 +345,9 @@ func (b *BencodeParser) acceptInt() (int64, error) {
 	}
 
 	// break if EOF, recieve 'e' or unparasable integer digit
+	isNegative := false
 	var num int64
-	for {
+	for i := 0; true; i++ {
 		cur, err = b.consumeToken()
 
 		if err != nil {
@@ -356,6 +357,11 @@ func (b *BencodeParser) acceptInt() (int64, error) {
 			break // end of integer
 		}
 
+		if i == 0 && string(cur) == "-" {
+			isNegative = true
+			continue
+		}
+
 		digit, err := isDigit(cur)
 		if err != nil {
 			return 0, fmt.Errorf("invalid character '%c' in integer", cur)
@@ -363,7 +369,9 @@ func (b *BencodeParser) acceptInt() (int64, error) {
 
 		num = num*10 + digit
 	}
-
+	if isNegative {
+		return num * -1, nil
+	}
 	return num, nil
 }
 
