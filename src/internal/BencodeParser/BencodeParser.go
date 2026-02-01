@@ -64,7 +64,6 @@ func (b *BencodeParser) bufIdxCheckAndHandle() error {
 			return EOF
 		}
 		if n == 0 {
-			// Prevent panic if reader returned 0 bytes but no error
 			return EOF
 		}
 		b.buf_len = uint64(n)
