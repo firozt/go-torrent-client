@@ -100,7 +100,7 @@ func TestAcceptList(t *testing.T) {
 		{
 			testName:         "single int",
 			input:            "li32ee",
-			expected:         []any{uint64(32)},
+			expected:         []any{int64(32)},
 			expectedEndIndex: 6,
 			throwsError:      false,
 		},
@@ -108,7 +108,7 @@ func TestAcceptList(t *testing.T) {
 			testName: "multiple values",
 			input:    "li1e3:abce",
 			expected: []any{
-				uint64(1),
+				int64(1),
 				"abc",
 			},
 			expectedEndIndex: 10,
@@ -119,7 +119,7 @@ func TestAcceptList(t *testing.T) {
 			input:    "lli1eee",
 			expected: []any{
 				[]any{
-					uint64(1),
+					int64(1),
 				},
 			},
 			expectedEndIndex: 7,
@@ -189,8 +189,8 @@ func TestParseInt(t *testing.T) {
 	type TestCase struct {
 		testName         string
 		input            string
-		expected         uint64
-		expectedEndIndex uint64
+		expected         int64
+		expectedEndIndex int64
 		throwsError      bool
 	}
 
@@ -247,10 +247,10 @@ func TestPackage(t *testing.T) {
 					0xf3, 0x5b, 0x4a, 0xd6, 0x27, 0xd2, 0x02, 0x36,
 					0xe4, 0x81, 0xd9, 0x24,
 				}, Info: BencodeInfo{
-					Length:     163783,
-					Name:       "alice.txt",
-					PieceLenth: 16384,
-					Piece:      [][20]byte{}, // skip comparison for this for
+					Length:      163783,
+					Name:        "alice.txt",
+					PieceLength: 16384,
+					Piece:       [][20]byte{}, // skip comparison for this for
 				},
 			},
 			throwsError: false,
@@ -264,10 +264,10 @@ func TestPackage(t *testing.T) {
 					0xc9, 0xe1, 0x57, 0x63, 0xf7, 0x22, 0xf2, 0x3e, 0x98, 0xa2,
 					0x9d, 0xec, 0xdf, 0xae, 0x34, 0x1b, 0x98, 0xd5, 0x30, 0x56,
 				}, Info: BencodeInfo{
-					Length:     0,
-					Name:       "Cosmos Laundromat",
-					PieceLenth: 262144,
-					Piece:      [][20]byte{},
+					Length:      0,
+					Name:        "Cosmos Laundromat",
+					PieceLength: 262144,
+					Piece:       [][20]byte{},
 				},
 			},
 			throwsError: false,
@@ -283,10 +283,10 @@ func TestPackage(t *testing.T) {
 					0xb0, 0xbb, 0xf8, 0x13, 0x23, 0xd8, 0x70, 0x62,
 					0xdb, 0x1f, 0x6d, 0x1c,
 				}, Info: BencodeInfo{
-					Length:     0,
-					Name:       "Big Buck Bunny",
-					PieceLenth: 262144,
-					Piece:      [][20]byte{},
+					Length:      0,
+					Name:        "Big Buck Bunny",
+					PieceLength: 262144,
+					Piece:       [][20]byte{},
 				},
 			},
 			throwsError: false,
@@ -302,10 +302,10 @@ func TestPackage(t *testing.T) {
 					0x66, 0x09, 0x5a, 0x10,
 				},
 				Info: BencodeInfo{
-					Length:     0,
-					Name:       "Sintel",
-					PieceLenth: 131072,
-					Piece:      [][20]byte{},
+					Length:      0,
+					Name:        "Sintel",
+					PieceLength: 131072,
+					Piece:       [][20]byte{},
 				},
 			},
 			throwsError: false,
@@ -321,10 +321,10 @@ func TestPackage(t *testing.T) {
 					0x0e, 0xd4, 0xda, 0xd3,
 				},
 				Info: BencodeInfo{
-					Length:     0,
-					Name:       "The WIRED CD - Rip. Sample. Mash. Share",
-					PieceLenth: 65536,
-					Piece:      [][20]byte{},
+					Length:      0,
+					Name:        "The WIRED CD - Rip. Sample. Mash. Share",
+					PieceLength: 65536,
+					Piece:       [][20]byte{},
 				},
 			},
 			throwsError: false,

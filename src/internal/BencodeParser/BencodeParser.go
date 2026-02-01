@@ -6,14 +6,15 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
 	"strconv"
 )
 
 type BencodeInfo struct {
-	Length     uint64     `bencode:"length"`
-	Name       string     `bencode:"name"`
-	PieceLenth uint64     `bencode:"piece length"`
-	Piece      [][20]byte `bencode:"pieces"` // list of sha-1 hashes with a 20 byte output
+	Length      uint64     `bencode:"length"`
+	Name        string     `bencode:"name"`
+	PieceLength uint64     `bencode:"piece length"`
+	Piece       [][20]byte `bencode:"pieces"` // list of sha-1 hashes with a 20 byte output
 }
 
 type BencodeTorrent struct {
@@ -35,6 +36,7 @@ type BencodeParser struct {
 
 // == Error definitions == //
 
+var INVALID_NEGATIVE_VALUE = fmt.Errorf("A negative number was taken for a non-negative field")
 var PARSE_ERR = fmt.Errorf("Parsing error")
 var EOB = fmt.Errorf("end of b.ffer error")
 var EOF = fmt.Errorf("End of file error")
@@ -112,42 +114,83 @@ func (b *BencodeParser) Read(reader io.Reader) (*BencodeTorrent, error) {
 	}
 	b.buf_len = uint64(n)
 	b.unmarshal(&torrent)
-
-	// for {
-	// 	n, err := reader.Read(b.buf)
-	// 	if n > 0 {
-	// 		b.buf_len = uint64(n)
-	// 		b.unmarshal(&torrent)
-	// 	}
-	// 	if err != nil {
-	// 		if err == io.EOF {
-	// 			break
-	// 		}
-	// 		return nil, err
-	// 	}
-	// }
-
 	return &torrent, nil
 }
 
-func (b *BencodeParser) IRToBencode(ir map[string]any, data *BencodeTorrent) {
-	marshalled, _ := json.Marshal(ir)
-	err := json.Unmarshal(marshalled, data)
+func (b *BencodeParser) IRToBencode(ir map[string]any, data *BencodeTorrent) error {
+	// Convert IR → struct via JSON (bridge, not ideal but workable)
+	marshalled, err := json.Marshal(ir)
 	if err != nil {
-		log.Fatalf("Cannot marshal unmarshaled data, should realistically never happen but linter complains")
+		return fmt.Errorf("failed to marshal IR: %w", err)
 	}
 
-	if info, ok := ir["info"].(map[string]any); ok {
-		if pieceLength, ok := info["piece length"]; ok {
-			data.Info.PieceLenth = pieceLength.(uint64)
-		}
+	if err := json.Unmarshal(marshalled, data); err != nil {
+		return fmt.Errorf("failed to unmarshal IR into torrent struct: %w", err)
 	}
-	data.CreationDate = ir["creation date"].(uint64)
+
+	// ---- validate info ----
+	info, ok := ir["info"].(map[string]any)
+	if !ok {
+		return fmt.Errorf("info field missing or invalid")
+	}
+
+	// piece length (required, must be > 0)
+	rawPieceLength, ok := info["piece length"]
+	if !ok {
+		return fmt.Errorf("piece length missing from info")
+	}
+
+	pieceLength, ok := asPositiveUint64(rawPieceLength)
+	if !ok || pieceLength == 0 {
+		return fmt.Errorf("invalid piece length")
+	}
+
+	// ---- creation date (top-level, optional but if present must be >= 0) ----
+	if rawCreationDate, exists := ir["creation date"]; exists {
+		creationDate, ok := asNonNegativeUint64(rawCreationDate)
+		if !ok {
+			return fmt.Errorf("invalid creation date")
+		}
+		data.CreationDate = creationDate
+	}
+
+	// ---- assign validated values ----
+	data.Info.PieceLength = pieceLength
 	data.InfoHash = sha1.Sum(b.infoBytes)
 
-	// prettyPrintMap(ir)
+	return nil
 }
 
+func asNonNegativeUint64(v any) (uint64, bool) {
+	switch n := v.(type) {
+	case int64:
+		if n < 0 {
+			return 0, false
+		}
+		return uint64(n), true
+
+	case int:
+		if n < 0 {
+			return 0, false
+		}
+		return uint64(n), true
+
+	case float64:
+		// JSON numbers often come through as float64
+		if n < 0 || math.Trunc(n) != n {
+			return 0, false
+		}
+		return uint64(n), true
+
+	default:
+		return 0, false
+	}
+}
+
+func asPositiveUint64(v any) (uint64, bool) {
+	u, ok := asNonNegativeUint64(v)
+	return u, ok && u > 0
+}
 func prettyPrintMap(x map[string]any) {
 	bc, err := json.MarshalIndent(x, "", "  ")
 	if err != nil {
@@ -293,7 +336,8 @@ func (b *BencodeParser) acceptList() ([]any, error) {
 	return resList, nil
 }
 
-func (b *BencodeParser) acceptInt() (uint64, error) {
+// allow negative numbers
+func (b *BencodeParser) acceptInt() (int64, error) {
 	// Expect initial 'i'
 	cur, err := b.consumeToken()
 	if err != nil || cur != 'i' {
@@ -301,7 +345,7 @@ func (b *BencodeParser) acceptInt() (uint64, error) {
 	}
 
 	// break if EOF, recieve 'e' or unparasable integer digit
-	var num uint64
+	var num int64
 	for {
 		cur, err = b.consumeToken()
 
@@ -376,11 +420,11 @@ func (b *BencodeParser) getStringLength() (uint64, error) {
 	return strconv.ParseUint(res, 10, 64)
 }
 
-func isDigit(c byte) (uint64, error) {
+func isDigit(c byte) (int64, error) {
 	digit, err := strconv.Atoi(string(c))
 	if err != nil {
 		return 0, err
 	}
 
-	return uint64(digit), nil
+	return int64(digit), nil
 }
