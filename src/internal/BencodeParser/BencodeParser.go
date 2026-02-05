@@ -10,15 +10,22 @@ import (
 )
 
 type BencodeInfo struct {
+	Name        string     `bencode:"name"` // meaning of field dependant on type of torrent file
 	Length      uint64     `bencode:"length"`
-	Name        string     `bencode:"name"`
 	PieceLength uint64     `bencode:"piece length"`
 	Piece       [][20]byte `bencode:"pieces"` // list of sha-1 hashes with a 20 byte output
+	Files       []BencodeFile
+}
+
+type BencodeFile struct {
+	Path   []string `bencode:"path" json:"path"`
+	Length uint64   `bencode:"length" json:"length"`
 }
 
 type BencodeTorrent struct {
 	InfoHash     [20]byte    `bencode:"info hash"` // sha-1 hash of info fields raw data
 	Announce     string      `bencode:"announce"`
+	AnnounceList []string    `bencode: "announce list" json:"announce-list"`
 	CreationDate uint64      `bencode:"creation date"`
 	Info         BencodeInfo `bencode:"info"`
 }
@@ -122,6 +129,21 @@ func Read(reader io.Reader) (*BencodeTorrent, error) {
 	return &torrent, nil
 }
 
+func flattenStringList(nested []any) []string {
+	var flat []string
+	for _, inner := range nested {
+		// inner is actually []any
+		if innerSlice, ok := inner.([]any); ok {
+			for _, s := range innerSlice {
+				if str, ok := s.(string); ok {
+					flat = append(flat, str)
+				}
+			}
+		}
+	}
+	return flat
+}
+
 func (b *BencodeParser) irToBencode(ir map[string]any, data *BencodeTorrent) error {
 	// Convert IR → struct via JSON (bridge, not ideal but workable)
 	marshalled, err := json.Marshal(ir)
@@ -131,6 +153,12 @@ func (b *BencodeParser) irToBencode(ir map[string]any, data *BencodeTorrent) err
 
 	if err := json.Unmarshal(marshalled, data); err != nil {
 		return fmt.Errorf("failed to unmarshal IR into torrent struct: %w", err)
+	}
+
+	announcelRaw, ok := ir["announce-list"].([]any)
+
+	if ok {
+		data.AnnounceList = flattenStringList(announcelRaw)
 	}
 
 	// ---- validate info ----
@@ -196,6 +224,7 @@ func asPositiveUint64(v any) (uint64, bool) {
 	u, ok := asNonNegativeUint64(v)
 	return u, ok && u > 0
 }
+
 func prettyPrintMap(x map[string]any) {
 	bc, err := json.MarshalIndent(x, "", "  ")
 	if err != nil {
@@ -211,7 +240,9 @@ func (b *BencodeParser) unmarshal(data *BencodeTorrent) error {
 		return fmt.Errorf("Unable to parse bencode raw data - %s", err)
 	}
 
+	// prettyPrintMap(IRData.(map[string]any))
 	b.irToBencode(IRData.(map[string]any), data)
+
 	return nil
 }
 

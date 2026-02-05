@@ -256,6 +256,7 @@ func TestPackage(t *testing.T) {
 					Name:        "alice.txt",
 					PieceLength: 16384,
 					Piece:       [][20]byte{}, // skip comparison for this for
+
 				},
 			},
 			throwsError: false,
@@ -263,16 +264,35 @@ func TestPackage(t *testing.T) {
 		{
 			fileName: "cosmos-laundromat.torrent",
 			expectedOutput: &BencodeTorrent{
+				Announce: "udp://tracker.leechers-paradise.org:6969",
+				AnnounceList: []string{
+					"udp://tracker.leechers-paradise.org:6969",
+					"udp://tracker.coppersurfer.tk:6969",
+					"udp://tracker.opentrackr.org:1337",
+					"udp://explodie.org:6969",
+					"udp://tracker.empire-js.us:1337",
+					"wss://tracker.btorrent.xyz",
+					"wss://tracker.openwebtorrent.com",
+					"wss://tracker.fastcast.nz",
+				},
 				CreationDate: 1490916617,
-				Announce:     "udp://tracker.leechers-paradise.org:6969",
 				InfoHash: [20]byte{
 					0xc9, 0xe1, 0x57, 0x63, 0xf7, 0x22, 0xf2, 0x3e, 0x98, 0xa2,
 					0x9d, 0xec, 0xdf, 0xae, 0x34, 0x1b, 0x98, 0xd5, 0x30, 0x56,
-				}, Info: BencodeInfo{
-					Length:      0,
+				},
+				Info: BencodeInfo{
+					Length:      0, // multi-file torrent
 					Name:        "Cosmos Laundromat",
 					PieceLength: 262144,
 					Piece:       [][20]byte{},
+					Files: []BencodeFile{
+						{Path: []string{"Cosmos Laundromat.en.srt"}, Length: 3945},
+						{Path: []string{"Cosmos Laundromat.es.srt"}, Length: 3911},
+						{Path: []string{"Cosmos Laundromat.fr.srt"}, Length: 4120},
+						{Path: []string{"Cosmos Laundromat.it.srt"}, Length: 3945},
+						{Path: []string{"Cosmos Laundromat.mp4"}, Length: 220087570},
+						{Path: []string{"poster.jpg"}, Length: 760595},
+					},
 				},
 			},
 			throwsError: false,
@@ -280,26 +300,52 @@ func TestPackage(t *testing.T) {
 		{
 			fileName: "big-buck-bunny.torrent",
 			expectedOutput: &BencodeTorrent{
-				Announce:     "udp://tracker.leechers-paradise.org:6969",
+				Announce: "udp://tracker.leechers-paradise.org:6969",
+				AnnounceList: []string{
+					"udp://tracker.leechers-paradise.org:6969",
+					"udp://tracker.coppersurfer.tk:6969",
+					"udp://tracker.opentrackr.org:1337",
+					"udp://explodie.org:6969",
+					"udp://tracker.empire-js.us:1337",
+					"wss://tracker.btorrent.xyz",
+					"wss://tracker.openwebtorrent.com",
+					"wss://tracker.fastcast.nz",
+				},
 				CreationDate: 1490916601,
 				InfoHash: [20]byte{
-					//
 					0xdd, 0x82, 0x55, 0xec, 0xdc, 0x7c, 0xa5, 0x5f,
 					0xb0, 0xbb, 0xf8, 0x13, 0x23, 0xd8, 0x70, 0x62,
 					0xdb, 0x1f, 0x6d, 0x1c,
-				}, Info: BencodeInfo{
+				},
+				Info: BencodeInfo{
 					Length:      0,
 					Name:        "Big Buck Bunny",
 					PieceLength: 262144,
 					Piece:       [][20]byte{},
+					Files: []BencodeFile{
+						{Path: []string{"Big Buck Bunny.en.srt"}, Length: 140},
+						{Path: []string{"Big Buck Bunny.mp4"}, Length: 276134947},
+						{Path: []string{"poster.jpg"}, Length: 310380},
+					},
 				},
 			},
 			throwsError: false,
 		},
+
 		{
 			fileName: "sintel.torrent",
 			expectedOutput: &BencodeTorrent{
-				Announce:     "udp://tracker.leechers-paradise.org:6969",
+				Announce: "udp://tracker.leechers-paradise.org:6969",
+				AnnounceList: []string{
+					"udp://tracker.leechers-paradise.org:6969",
+					"udp://tracker.coppersurfer.tk:6969",
+					"udp://tracker.opentrackr.org:1337",
+					"udp://explodie.org:6969",
+					"udp://tracker.empire-js.us:1337",
+					"wss://tracker.btorrent.xyz",
+					"wss://tracker.openwebtorrent.com",
+					"wss://tracker.fastcast.nz",
+				},
 				CreationDate: 1490916637,
 				InfoHash: [20]byte{
 					0x08, 0xad, 0xa5, 0xa7, 0xa6, 0x18, 0x3a, 0xae,
@@ -307,18 +353,42 @@ func TestPackage(t *testing.T) {
 					0x66, 0x09, 0x5a, 0x10,
 				},
 				Info: BencodeInfo{
-					Length:      0,
+					Length:      0, // multi-file torrent
 					Name:        "Sintel",
 					PieceLength: 131072,
 					Piece:       [][20]byte{},
+					Files: []BencodeFile{
+						{Path: []string{"Sintel.de.srt"}, Length: 1652},
+						{Path: []string{"Sintel.en.srt"}, Length: 1514},
+						{Path: []string{"Sintel.es.srt"}, Length: 1554},
+						{Path: []string{"Sintel.fr.srt"}, Length: 1618},
+						{Path: []string{"Sintel.it.srt"}, Length: 1546},
+						{Path: []string{"Sintel.mp4"}, Length: 129241752},
+						{Path: []string{"Sintel.nl.srt"}, Length: 1537},
+						{Path: []string{"Sintel.pl.srt"}, Length: 1536},
+						{Path: []string{"Sintel.pt.srt"}, Length: 1551},
+						{Path: []string{"Sintel.ru.srt"}, Length: 2016},
+						{Path: []string{"poster.jpg"}, Length: 46115},
+					},
 				},
 			},
 			throwsError: false,
 		},
+
 		{
 			fileName: "wired-cd.torrent",
 			expectedOutput: &BencodeTorrent{
-				Announce:     "udp://tracker.leechers-paradise.org:6969",
+				Announce: "udp://tracker.leechers-paradise.org:6969",
+				AnnounceList: []string{
+					"udp://tracker.leechers-paradise.org:6969",
+					"udp://tracker.coppersurfer.tk:6969",
+					"udp://tracker.opentrackr.org:1337",
+					"udp://explodie.org:6969",
+					"udp://tracker.empire-js.us:1337",
+					"wss://tracker.btorrent.xyz",
+					"wss://tracker.openwebtorrent.com",
+					"wss://tracker.fastcast.nz",
+				},
 				CreationDate: 1490916588,
 				InfoHash: [20]byte{
 					0xa8, 0x8f, 0xda, 0x59, 0x54, 0xe8, 0x91, 0x78,
@@ -326,10 +396,30 @@ func TestPackage(t *testing.T) {
 					0x0e, 0xd4, 0xda, 0xd3,
 				},
 				Info: BencodeInfo{
-					Length:      0,
+					Length:      0, // multi-file torrent
 					Name:        "The WIRED CD - Rip. Sample. Mash. Share",
 					PieceLength: 65536,
 					Piece:       [][20]byte{},
+					Files: []BencodeFile{
+						{Path: []string{"01 - Beastie Boys - Now Get Busy.mp3"}, Length: 1964275},
+						{Path: []string{"02 - David Byrne - My Fair Lady.mp3"}, Length: 3610523},
+						{Path: []string{"03 - Zap Mama - Wadidyusay.mp3"}, Length: 2759377},
+						{Path: []string{"04 - My Morning Jacket - One Big Holiday.mp3"}, Length: 5816537},
+						{Path: []string{"05 - Spoon - Revenge!.mp3"}, Length: 2106421},
+						{Path: []string{"06 - Gilberto Gil - Oslodum.mp3"}, Length: 3347550},
+						{Path: []string{"07 - Dan The Automator - Relaxation Spa Treatment.mp3"}, Length: 2107577},
+						{Path: []string{"08 - Thievery Corporation - Dc 3000.mp3"}, Length: 3108130},
+						{Path: []string{"09 - Le Tigre - Fake French.mp3"}, Length: 3051528},
+						{Path: []string{"10 - Paul Westerberg - Looking Up In Heaven.mp3"}, Length: 3270259},
+						{Path: []string{"11 - Chuck D - No Meaning No (feat. Fine Arts Militia).mp3"}, Length: 3263528},
+						{Path: []string{"12 - The Rapture - Sister Saviour (Blackstrobe Remix).mp3"}, Length: 6380952},
+						{Path: []string{"13 - Cornelius - Wataridori 2.mp3"}, Length: 6550396},
+						{Path: []string{"14 - DJ Danger Mouse - What U Sittin' On (feat. Jemini, Cee Lo And Tha Alkaholiks).mp3"}, Length: 3034692},
+						{Path: []string{"15 - DJ Dolores - Oslodum 2004.mp3"}, Length: 3854611},
+						{Path: []string{"16 - Matmos - Action At A Distance.mp3"}, Length: 1762120},
+						{Path: []string{"README.md"}, Length: 4071},
+						{Path: []string{"poster.jpg"}, Length: 78163},
+					},
 				},
 			},
 			throwsError: false,
