@@ -22,7 +22,7 @@ type BencodeFile struct {
 	Length uint64   `bencode:"length" json:"length"`
 }
 
-type BencodeTorrent struct {
+type Bencode struct {
 	InfoHash     [20]byte    `bencode:"info hash"` // sha-1 hash of info fields raw data
 	Announce     string      `bencode:"announce"`
 	AnnounceList []string    `bencode: "announce list" json:"announce-list"`
@@ -111,13 +111,13 @@ func (b *BencodeParser) peekToken() (byte, error) {
 	return b.buf[b.cur_idx], nil
 }
 
-func Read(reader io.Reader) (*BencodeTorrent, error) {
+func Read(reader io.Reader) (*Bencode, error) {
 	if reader == nil {
 		return nil, fmt.Errorf("No reader supplied")
 	}
 
 	b := makeBencodeParser(&reader)
-	var torrent BencodeTorrent
+	var torrent Bencode
 	b.reader = &reader
 	n, err := reader.Read(b.buf)
 
@@ -144,7 +144,7 @@ func flattenStringList(nested []any) []string {
 	return flat
 }
 
-func (b *BencodeParser) irToBencode(ir map[string]any, data *BencodeTorrent) error {
+func (b *BencodeParser) irToBencode(ir map[string]any, data *Bencode) error {
 	// Convert IR → struct via JSON (bridge, not ideal but workable)
 	marshalled, err := json.Marshal(ir)
 	if err != nil {
@@ -161,7 +161,7 @@ func (b *BencodeParser) irToBencode(ir map[string]any, data *BencodeTorrent) err
 		data.AnnounceList = flattenStringList(announcelRaw)
 	}
 
-	// ---- validate info ----
+	// validating fields that must exist, and type conversions
 	info, ok := ir["info"].(map[string]any)
 	if !ok {
 		return fmt.Errorf("info field missing or invalid")
@@ -233,7 +233,7 @@ func prettyPrintMap(x map[string]any) {
 	fmt.Print(string(bc))
 }
 
-func (b *BencodeParser) unmarshal(data *BencodeTorrent) error {
+func (b *BencodeParser) unmarshal(data *Bencode) error {
 
 	IRData, err := b.parseValue()
 	if err != nil {
