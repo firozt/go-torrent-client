@@ -238,14 +238,14 @@ func TestParseList(t *testing.T) {
 func TestPackage(t *testing.T) {
 	type TestCase struct {
 		fileName       string
-		expectedOutput *Bencode
+		expectedOutput *BencodeTorrent
 		throwsError    bool
 	}
 	// files with test data info
 	testcase := []TestCase{
 		{
 			fileName: "alice.torrent",
-			expectedOutput: &Bencode{
+			expectedOutput: &BencodeTorrent{
 				CreationDate: 1452468725091,
 				InfoHash: [20]byte{
 					0x72, 0x2f, 0xe6, 0x5b, 0x2a, 0xa2, 0x6d, 0x14,
@@ -263,7 +263,7 @@ func TestPackage(t *testing.T) {
 		},
 		{
 			fileName: "cosmos-laundromat.torrent",
-			expectedOutput: &Bencode{
+			expectedOutput: &BencodeTorrent{
 				Announce: "udp://tracker.leechers-paradise.org:6969",
 
 				AnnounceList: [][]any{
@@ -300,7 +300,7 @@ func TestPackage(t *testing.T) {
 		},
 		{
 			fileName: "big-buck-bunny.torrent",
-			expectedOutput: &Bencode{
+			expectedOutput: &BencodeTorrent{
 				Announce: "udp://tracker.leechers-paradise.org:6969",
 
 				AnnounceList: [][]any{
@@ -336,7 +336,7 @@ func TestPackage(t *testing.T) {
 
 		{
 			fileName: "sintel.torrent",
-			expectedOutput: &Bencode{
+			expectedOutput: &BencodeTorrent{
 				Announce: "udp://tracker.leechers-paradise.org:6969",
 
 				AnnounceList: [][]any{
@@ -380,7 +380,7 @@ func TestPackage(t *testing.T) {
 
 		{
 			fileName: "wired-cd.torrent",
-			expectedOutput: &Bencode{
+			expectedOutput: &BencodeTorrent{
 				Announce: "udp://tracker.leechers-paradise.org:6969",
 
 				AnnounceList: [][]any{
@@ -432,7 +432,7 @@ func TestPackage(t *testing.T) {
 	for _, tc := range testcase {
 		t.Run(tc.fileName, func(t *testing.T) {
 			r := readTestDataFile(tc.fileName)
-			var bencodeData Bencode
+			var bencodeData BencodeTorrent
 			err := Read(r, &bencodeData)
 			if !tc.throwsError && err != nil {
 				t.Errorf("unexpected error thrown by Read - %s\n", err)

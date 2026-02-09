@@ -9,7 +9,7 @@ import (
 func TestPackage(t *testing.T) {
 	type TestCase struct {
 		testname  string
-		input     *bencodeparser.Bencode
+		input     *bencodeparser.BencodeTorrent
 		expected  Torrent
 		throwsErr bool
 	}
@@ -17,7 +17,7 @@ func TestPackage(t *testing.T) {
 	testcases := []TestCase{
 		{
 			testname: "valid SFM",
-			input: &bencodeparser.Bencode{
+			input: &bencodeparser.BencodeTorrent{
 				Info: bencodeparser.BencodeInfo{
 					Name:        "example.txt",
 					Length:      1024,
@@ -50,7 +50,7 @@ func TestPackage(t *testing.T) {
 		},
 		{
 			testname: "valid MFM",
-			input: &bencodeparser.Bencode{
+			input: &bencodeparser.BencodeTorrent{
 				Info: bencodeparser.BencodeInfo{
 					Name:        "music_album",
 					PieceLength: 32768,
@@ -87,7 +87,7 @@ func TestPackage(t *testing.T) {
 		},
 		{
 			testname: "invalid pieces length",
-			input: &bencodeparser.Bencode{
+			input: &bencodeparser.BencodeTorrent{
 				Info: bencodeparser.BencodeInfo{
 					Name:        "broken.txt",
 					Length:      512,

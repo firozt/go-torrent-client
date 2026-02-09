@@ -23,7 +23,7 @@ type BencodeFile struct {
 	Length int64    `bencode:"length" json:"length"`
 }
 
-type Bencode struct {
+type BencodeTorrent struct {
 	InfoHash     [20]byte    `bencode:"info hash" json:"info_hash"`
 	Announce     string      `bencode:"announce" json:"announce"`
 	AnnounceList [][]any     `bencode:"announce list" json:"announce-list"`
@@ -132,21 +132,6 @@ func Read(reader io.Reader, v any) error {
 	}
 
 	return nil
-}
-
-func flattenStringList(nested []any) []string {
-	var flat []string
-	for _, inner := range nested {
-		// inner is actually []any
-		if innerSlice, ok := inner.([]any); ok {
-			for _, s := range innerSlice {
-				if str, ok := s.(string); ok {
-					flat = append(flat, str)
-				}
-			}
-		}
-	}
-	return flat
 }
 
 func (b *BencodeParser) irToBencode(ir map[string]any, data any) error {

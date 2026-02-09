@@ -39,7 +39,7 @@ func (TorrentFileSFM) IsMultiFile() bool { return false }
 // entry, takes bencode data and verifies all fields,
 // makes sure its correct for either SFM or MFM
 // returns a Torrent interface struct and error value
-func ValidateBencodeData(data *bencodeparser.Bencode) (Torrent, error) {
+func ValidateBencodeData(data *bencodeparser.BencodeTorrent) (Torrent, error) {
 	// check its base
 	base, err := attemptParseBase(data)
 	if err != nil {
@@ -70,7 +70,7 @@ func ValidateBencodeData(data *bencodeparser.Bencode) (Torrent, error) {
 // info
 // ---- piece length
 // ---- piece
-func attemptParseBase(data *bencodeparser.Bencode) (*torrentFile, error) {
+func attemptParseBase(data *bencodeparser.BencodeTorrent) (*torrentFile, error) {
 	if data.Announce == "" {
 		return nil, fmt.Errorf("data could not be parsed into a base torrent file, announce is empty")
 	}
@@ -146,7 +146,7 @@ func isInfoExist(info bencodeparser.BencodeInfo) bool {
 	return true
 }
 
-func attemptParseSFM(data *bencodeparser.Bencode) (*TorrentFileSFM, error) {
+func attemptParseSFM(data *bencodeparser.BencodeTorrent) (*TorrentFileSFM, error) {
 	// check SFM specific values are set
 	if data.Info.Name == "" || data.Info.Length <= 0 {
 		return &TorrentFileSFM{}, fmt.Errorf("data could not be parsed into a SFM, info name is empty or info length is zero")
@@ -159,7 +159,7 @@ func attemptParseSFM(data *bencodeparser.Bencode) (*TorrentFileSFM, error) {
 	return sfm, nil
 }
 
-func attemptParseMFM(data *bencodeparser.Bencode) (*TorrentFileMFM, error) {
+func attemptParseMFM(data *bencodeparser.BencodeTorrent) (*TorrentFileMFM, error) {
 	// check for MFM specific values are set
 	if len(data.Info.Files) < 1 { // checks that there exists atleast one file
 		return nil, fmt.Errorf("data could not be parsed into MFM, info files is empty")
