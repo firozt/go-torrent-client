@@ -41,13 +41,15 @@ func (TorrentFileSFM) IsMultiFile() bool { return false }
 // returns a Torrent interface struct and error value
 func ValidateBencodeData(data *bencodeparser.Bencode) (Torrent, error) {
 	// check its base
-	err := checkBaseTorrent(data)
+	base, err := attemptParseBase(data)
 	if err != nil {
 		return nil, err
 	}
+
 	// check if it can be SFM
 	SFMData, err := attemptParseSFM(data)
 	if err == nil {
+		SFMData.torrentFile = *base
 		return SFMData, err
 	}
 
@@ -55,6 +57,7 @@ func ValidateBencodeData(data *bencodeparser.Bencode) (Torrent, error) {
 	MFMData, err := attemptParseMFM(data)
 
 	if err == nil {
+		MFMData.torrentFile = *base
 		return MFMData, err
 	}
 
@@ -67,23 +70,76 @@ func ValidateBencodeData(data *bencodeparser.Bencode) (Torrent, error) {
 // info
 // ---- piece length
 // ---- piece
-func checkBaseTorrent(data *bencodeparser.Bencode) error {
+func attemptParseBase(data *bencodeparser.Bencode) (*torrentFile, error) {
 	if data.Announce == "" {
-		return fmt.Errorf("data could not be parsed into a base torrent file, announce is empty")
+		return nil, fmt.Errorf("data could not be parsed into a base torrent file, announce is empty")
 	}
 
 	if !isInfoExist(data.Info) {
-		return fmt.Errorf("data could not be parsed into a base torrent file, info is invalid or empty")
+		return nil, fmt.Errorf("data could not be parsed into a base torrent file, info is invalid or empty")
 	}
 
-	return nil
+	if data.Info.PieceLength < 0 {
+		return nil, fmt.Errorf("Piece length is negative, invalid for a torrentfile")
+	}
+
+	if data.CreationDate < 0 {
+		return nil, fmt.Errorf("Creation date is negative, invalid for a torrentfile")
+	}
+
+	validPieceVal, err := pieceStringToHashList(data.Info.Piece)
+
+	if err != nil {
+		return nil, err
+	}
+
+	base := torrentFile{
+		Name:         data.Info.Name,
+		Announce:     data.Announce,
+		AnnounceList: flattenAnnounceList(data.AnnounceList),
+		PieceLength:  uint64(data.Info.PieceLength),
+		Pieces:       validPieceVal,
+		InfoHash:     data.InfoHash,
+		CreationDate: uint64(data.CreationDate),
+	}
+
+	return &base, nil
+}
+
+func pieceStringToHashList(pieces string) ([][20]byte, error) {
+	pieceBytes := []byte(pieces)
+
+	if len(pieceBytes)%20 != 0 {
+		return nil, fmt.Errorf("piece string is not a multiple of 20")
+	}
+
+	numHashes := len(pieces) / 20
+	res := make([][20]byte, numHashes)
+	for i := 0; i < numHashes; i++ {
+		copy(res[i][:], pieceBytes[i*20:(i+1)*20])
+	}
+
+	return res, nil
+}
+
+func flattenAnnounceList(input [][]any) []string {
+	var out []string
+	for _, inner := range input {
+		for _, item := range inner {
+			// type assert each item to string
+			if s, ok := item.(string); ok {
+				out = append(out, s)
+			}
+		}
+	}
+	return out
 }
 
 func isInfoExist(info bencodeparser.BencodeInfo) bool {
-	if len(info.Piece) > 0 {
+	if len(info.Piece) == 0 { // must have a piece string
 		return false
 	}
-	if info.PieceLength == 0 {
+	if info.PieceLength == 0 { // must have piece length
 		return false
 	}
 
@@ -92,52 +148,30 @@ func isInfoExist(info bencodeparser.BencodeInfo) bool {
 
 func attemptParseSFM(data *bencodeparser.Bencode) (*TorrentFileSFM, error) {
 	// check SFM specific values are set
-	if data.Info.Name == "" || data.Info.Length == 0 {
+	if data.Info.Name == "" || data.Info.Length <= 0 {
 		return &TorrentFileSFM{}, fmt.Errorf("data could not be parsed into a SFM, info name is empty or info length is zero")
 	}
 
-	base := torrentFile{
-		Name:         data.Info.Name,
-		Announce:     data.Announce,
-		AnnounceList: data.AnnounceList,
-		PieceLength:  data.Info.PieceLength,
-		Pieces:       data.Info.Piece,
-		InfoHash:     data.InfoHash,
-		CreationDate: data.CreationDate,
-	}
-
 	sfm := &TorrentFileSFM{
-		torrentFile: base,
-		Length:      data.Info.Length,
+		Length: uint64(data.Info.Length),
 	}
 
 	return sfm, nil
 }
 
-func attemptParseMFM(data *bencodeparser.Bencode) (TorrentFileMFM, error) {
+func attemptParseMFM(data *bencodeparser.Bencode) (*TorrentFileMFM, error) {
 	// check for MFM specific values are set
-	if len(data.Info.Files) < 1 {
-		return TorrentFileMFM{}, fmt.Errorf("data could not be parsed into MFM, info files is empty")
+	if len(data.Info.Files) < 1 { // checks that there exists atleast one file
+		return nil, fmt.Errorf("data could not be parsed into MFM, info files is empty")
 	}
-	base := torrentFile{
-		Name:         data.Info.Name,
-		Announce:     data.Announce,
-		AnnounceList: data.AnnounceList,
-		InfoHash:     data.InfoHash,
-		CreationDate: data.CreationDate,
-		PieceLength:  data.Info.PieceLength,
-		Pieces:       data.Info.Piece,
-	}
-
 	mfm := TorrentFileMFM{
-		torrentFile: base,
-		Files:       []bencodeparser.BencodeFile{},
+		Files: []bencodeparser.BencodeFile{},
 	}
 
 	for _, file := range data.Info.Files {
 		mfm.Files = append(mfm.Files, file)
 	}
 
-	return mfm, nil
+	return &mfm, nil
 
 }

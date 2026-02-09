@@ -255,7 +255,7 @@ func TestPackage(t *testing.T) {
 					Length:      163783,
 					Name:        "alice.txt",
 					PieceLength: 16384,
-					Piece:       [][20]byte{}, // skip comparison for this for
+					Piece:       "", // skip comparison for this for
 
 				},
 			},
@@ -265,15 +265,16 @@ func TestPackage(t *testing.T) {
 			fileName: "cosmos-laundromat.torrent",
 			expectedOutput: &Bencode{
 				Announce: "udp://tracker.leechers-paradise.org:6969",
-				AnnounceList: []string{
-					"udp://tracker.leechers-paradise.org:6969",
-					"udp://tracker.coppersurfer.tk:6969",
-					"udp://tracker.opentrackr.org:1337",
-					"udp://explodie.org:6969",
-					"udp://tracker.empire-js.us:1337",
-					"wss://tracker.btorrent.xyz",
-					"wss://tracker.openwebtorrent.com",
-					"wss://tracker.fastcast.nz",
+
+				AnnounceList: [][]any{
+					{"udp://tracker.leechers-paradise.org:6969"},
+					{"udp://tracker.coppersurfer.tk:6969"},
+					{"udp://tracker.opentrackr.org:1337"},
+					{"udp://explodie.org:6969"},
+					{"udp://tracker.empire-js.us:1337"},
+					{"wss://tracker.btorrent.xyz"},
+					{"wss://tracker.openwebtorrent.com"},
+					{"wss://tracker.fastcast.nz"},
 				},
 				CreationDate: 1490916617,
 				InfoHash: [20]byte{
@@ -284,7 +285,7 @@ func TestPackage(t *testing.T) {
 					Length:      0, // multi-file torrent
 					Name:        "Cosmos Laundromat",
 					PieceLength: 262144,
-					Piece:       [][20]byte{},
+					Piece:       "",
 					Files: []BencodeFile{
 						{Path: []string{"Cosmos Laundromat.en.srt"}, Length: 3945},
 						{Path: []string{"Cosmos Laundromat.es.srt"}, Length: 3911},
@@ -301,15 +302,16 @@ func TestPackage(t *testing.T) {
 			fileName: "big-buck-bunny.torrent",
 			expectedOutput: &Bencode{
 				Announce: "udp://tracker.leechers-paradise.org:6969",
-				AnnounceList: []string{
-					"udp://tracker.leechers-paradise.org:6969",
-					"udp://tracker.coppersurfer.tk:6969",
-					"udp://tracker.opentrackr.org:1337",
-					"udp://explodie.org:6969",
-					"udp://tracker.empire-js.us:1337",
-					"wss://tracker.btorrent.xyz",
-					"wss://tracker.openwebtorrent.com",
-					"wss://tracker.fastcast.nz",
+
+				AnnounceList: [][]any{
+					{"udp://tracker.leechers-paradise.org:6969"},
+					{"udp://tracker.coppersurfer.tk:6969"},
+					{"udp://tracker.opentrackr.org:1337"},
+					{"udp://explodie.org:6969"},
+					{"udp://tracker.empire-js.us:1337"},
+					{"wss://tracker.btorrent.xyz"},
+					{"wss://tracker.openwebtorrent.com"},
+					{"wss://tracker.fastcast.nz"},
 				},
 				CreationDate: 1490916601,
 				InfoHash: [20]byte{
@@ -321,7 +323,7 @@ func TestPackage(t *testing.T) {
 					Length:      0,
 					Name:        "Big Buck Bunny",
 					PieceLength: 262144,
-					Piece:       [][20]byte{},
+					Piece:       "",
 					Files: []BencodeFile{
 						{Path: []string{"Big Buck Bunny.en.srt"}, Length: 140},
 						{Path: []string{"Big Buck Bunny.mp4"}, Length: 276134947},
@@ -336,15 +338,16 @@ func TestPackage(t *testing.T) {
 			fileName: "sintel.torrent",
 			expectedOutput: &Bencode{
 				Announce: "udp://tracker.leechers-paradise.org:6969",
-				AnnounceList: []string{
-					"udp://tracker.leechers-paradise.org:6969",
-					"udp://tracker.coppersurfer.tk:6969",
-					"udp://tracker.opentrackr.org:1337",
-					"udp://explodie.org:6969",
-					"udp://tracker.empire-js.us:1337",
-					"wss://tracker.btorrent.xyz",
-					"wss://tracker.openwebtorrent.com",
-					"wss://tracker.fastcast.nz",
+
+				AnnounceList: [][]any{
+					{"udp://tracker.leechers-paradise.org:6969"},
+					{"udp://tracker.coppersurfer.tk:6969"},
+					{"udp://tracker.opentrackr.org:1337"},
+					{"udp://explodie.org:6969"},
+					{"udp://tracker.empire-js.us:1337"},
+					{"wss://tracker.btorrent.xyz"},
+					{"wss://tracker.openwebtorrent.com"},
+					{"wss://tracker.fastcast.nz"},
 				},
 				CreationDate: 1490916637,
 				InfoHash: [20]byte{
@@ -356,7 +359,7 @@ func TestPackage(t *testing.T) {
 					Length:      0, // multi-file torrent
 					Name:        "Sintel",
 					PieceLength: 131072,
-					Piece:       [][20]byte{},
+					Piece:       "",
 					Files: []BencodeFile{
 						{Path: []string{"Sintel.de.srt"}, Length: 1652},
 						{Path: []string{"Sintel.en.srt"}, Length: 1514},
@@ -379,15 +382,16 @@ func TestPackage(t *testing.T) {
 			fileName: "wired-cd.torrent",
 			expectedOutput: &Bencode{
 				Announce: "udp://tracker.leechers-paradise.org:6969",
-				AnnounceList: []string{
-					"udp://tracker.leechers-paradise.org:6969",
-					"udp://tracker.coppersurfer.tk:6969",
-					"udp://tracker.opentrackr.org:1337",
-					"udp://explodie.org:6969",
-					"udp://tracker.empire-js.us:1337",
-					"wss://tracker.btorrent.xyz",
-					"wss://tracker.openwebtorrent.com",
-					"wss://tracker.fastcast.nz",
+
+				AnnounceList: [][]any{
+					{"udp://tracker.leechers-paradise.org:6969"},
+					{"udp://tracker.coppersurfer.tk:6969"},
+					{"udp://tracker.opentrackr.org:1337"},
+					{"udp://explodie.org:6969"},
+					{"udp://tracker.empire-js.us:1337"},
+					{"wss://tracker.btorrent.xyz"},
+					{"wss://tracker.openwebtorrent.com"},
+					{"wss://tracker.fastcast.nz"},
 				},
 				CreationDate: 1490916588,
 				InfoHash: [20]byte{
@@ -399,7 +403,7 @@ func TestPackage(t *testing.T) {
 					Length:      0, // multi-file torrent
 					Name:        "The WIRED CD - Rip. Sample. Mash. Share",
 					PieceLength: 65536,
-					Piece:       [][20]byte{},
+					Piece:       "",
 					Files: []BencodeFile{
 						{Path: []string{"01 - Beastie Boys - Now Get Busy.mp3"}, Length: 1964275},
 						{Path: []string{"02 - David Byrne - My Fair Lady.mp3"}, Length: 3610523},
@@ -428,15 +432,16 @@ func TestPackage(t *testing.T) {
 	for _, tc := range testcase {
 		t.Run(tc.fileName, func(t *testing.T) {
 			r := readTestDataFile(tc.fileName)
-			bencodeData, err := Read(r)
+			var bencodeData Bencode
+			err := Read(r, &bencodeData)
 			if !tc.throwsError && err != nil {
 				t.Errorf("unexpected error thrown by Read - %s\n", err)
 			}
 
 			// we do not need to validate pieces as we can just validate the info_hash is valid
-			bencodeData.Info.Piece = [][20]byte{}
+			bencodeData.Info.Piece = ""
 
-			if !reflect.DeepEqual(bencodeData, tc.expectedOutput) {
+			if !reflect.DeepEqual(&bencodeData, tc.expectedOutput) {
 				t.Errorf("got values and wanted are different\n got :\n%+v\nwanted:\n%+v\n", bencodeData, tc.expectedOutput)
 			}
 		})

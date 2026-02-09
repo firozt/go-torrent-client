@@ -6,28 +6,29 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"reflect"
 	"strconv"
 )
 
 type BencodeInfo struct {
-	Name        string     `bencode:"name"` // meaning of field dependant on type of torrent file
-	Length      uint64     `bencode:"length"`
-	PieceLength uint64     `bencode:"piece length"`
-	Piece       [][20]byte `bencode:"pieces"` // list of sha-1 hashes with a 20 byte output
-	Files       []BencodeFile
+	Name        string        `bencode:"name" json:"name"`
+	Length      int64         `bencode:"length" json:"length"`
+	PieceLength int64         `bencode:"piece length" json:"piece length"`
+	Piece       string        `bencode:"pieces" json:"pieces"`
+	Files       []BencodeFile `bencode:"files" json:"files"`
 }
 
 type BencodeFile struct {
 	Path   []string `bencode:"path" json:"path"`
-	Length uint64   `bencode:"length" json:"length"`
+	Length int64    `bencode:"length" json:"length"`
 }
 
 type Bencode struct {
-	InfoHash     [20]byte    `bencode:"info hash"` // sha-1 hash of info fields raw data
-	Announce     string      `bencode:"announce"`
-	AnnounceList []string    `bencode: "announce list" json:"announce-list"`
-	CreationDate uint64      `bencode:"creation date"`
-	Info         BencodeInfo `bencode:"info"`
+	InfoHash     [20]byte    `bencode:"info hash" json:"info_hash"`
+	Announce     string      `bencode:"announce" json:"announce"`
+	AnnounceList [][]any     `bencode:"announce list" json:"announce-list"`
+	CreationDate int64       `bencode:"creation date" json:"creation date"`
+	Info         BencodeInfo `bencode:"info" json:"info"`
 }
 
 type BencodeParser struct {
@@ -111,22 +112,26 @@ func (b *BencodeParser) peekToken() (byte, error) {
 	return b.buf[b.cur_idx], nil
 }
 
-func Read(reader io.Reader) (*Bencode, error) {
+func Read(reader io.Reader, v any) error {
 	if reader == nil {
-		return nil, fmt.Errorf("No reader supplied")
+		return fmt.Errorf("No reader supplied")
 	}
 
 	b := makeBencodeParser(&reader)
-	var torrent Bencode
+
 	b.reader = &reader
 	n, err := reader.Read(b.buf)
 
 	if err != nil {
-		return nil, err
+		return err
 	}
 	b.buf_len = uint64(n)
-	b.unmarshal(&torrent)
-	return &torrent, nil
+	err = b.unmarshal(v)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func flattenStringList(nested []any) []string {
@@ -144,7 +149,7 @@ func flattenStringList(nested []any) []string {
 	return flat
 }
 
-func (b *BencodeParser) irToBencode(ir map[string]any, data *Bencode) error {
+func (b *BencodeParser) irToBencode(ir map[string]any, data any) error {
 	// Convert IR → struct via JSON (bridge, not ideal but workable)
 	marshalled, err := json.Marshal(ir)
 	if err != nil {
@@ -155,43 +160,41 @@ func (b *BencodeParser) irToBencode(ir map[string]any, data *Bencode) error {
 		return fmt.Errorf("failed to unmarshal IR into torrent struct: %w", err)
 	}
 
-	announcelRaw, ok := ir["announce-list"].([]any)
-
-	if ok {
-		data.AnnounceList = flattenStringList(announcelRaw)
+	if err = setInfoHash(data, b.infoBytes); err != nil {
+		return nil
 	}
-
-	// validating fields that must exist, and type conversions
-	info, ok := ir["info"].(map[string]any)
-	if !ok {
-		return fmt.Errorf("info field missing or invalid")
-	}
-
-	// piece length (required, must be > 0)
-	rawPieceLength, ok := info["piece length"]
-	if !ok {
-		return fmt.Errorf("piece length missing from info")
-	}
-
-	pieceLength, ok := asPositiveUint64(rawPieceLength)
-	if !ok || pieceLength == 0 {
-		return fmt.Errorf("invalid piece length")
-	}
-
-	// ---- creation date (top-level, optional but if present must be >= 0) ----
-	if rawCreationDate, exists := ir["creation date"]; exists {
-		creationDate, ok := asNonNegativeUint64(rawCreationDate)
-		if !ok {
-			return fmt.Errorf("invalid creation date")
-		}
-		data.CreationDate = creationDate
-	}
-
-	// ---- assign validated values ----
-	data.Info.PieceLength = pieceLength
-	data.InfoHash = sha1.Sum(b.infoBytes)
 
 	return nil
+}
+
+func setInfoHash(data any, infoBytes []byte) error {
+	val := reflect.ValueOf(data)
+
+	// Must be a pointer so we can set fields
+	if val.Kind() != reflect.Ptr || val.Elem().Kind() != reflect.Struct {
+		return fmt.Errorf("data must be a pointer to a struct")
+	}
+
+	val = val.Elem() // get the struct value
+
+	field := val.FieldByName("InfoHash")
+	if !field.IsValid() {
+		return fmt.Errorf("field InfoHash not found")
+	}
+	if !field.CanSet() {
+		return fmt.Errorf("field InfoHash cannot be set (maybe unexported)")
+	}
+
+	// Compute SHA-1
+	sum := sha1.Sum(infoBytes)
+
+	// Field must be assignable to [20]byte
+	if field.Type() == reflect.TypeOf([20]byte{}) {
+		field.Set(reflect.ValueOf(sum))
+		return nil
+	}
+
+	return fmt.Errorf("InfoHash field is wrong type")
 }
 
 func asNonNegativeUint64(v any) (uint64, bool) {
@@ -233,15 +236,17 @@ func prettyPrintMap(x map[string]any) {
 	fmt.Print(string(bc))
 }
 
-func (b *BencodeParser) unmarshal(data *Bencode) error {
-
+func (b *BencodeParser) unmarshal(data any) error {
 	IRData, err := b.parseValue()
 	if err != nil {
 		return fmt.Errorf("Unable to parse bencode raw data - %s", err)
 	}
 
 	// prettyPrintMap(IRData.(map[string]any))
-	b.irToBencode(IRData.(map[string]any), data)
+	err = b.irToBencode(IRData.(map[string]any), data)
+	if err != nil {
+		return fmt.Errorf("Unable to convert IR to struct %s\n", err)
+	}
 
 	return nil
 }
