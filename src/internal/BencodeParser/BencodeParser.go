@@ -10,27 +10,6 @@ import (
 	"strconv"
 )
 
-type BencodeInfo struct {
-	Name        string        `bencode:"name" json:"name"`
-	Length      int64         `bencode:"length" json:"length"`
-	PieceLength int64         `bencode:"piece length" json:"piece length"`
-	Piece       string        `bencode:"pieces" json:"pieces"`
-	Files       []BencodeFile `bencode:"files" json:"files"`
-}
-
-type BencodeFile struct {
-	Path   []string `bencode:"path" json:"path"`
-	Length int64    `bencode:"length" json:"length"`
-}
-
-type BencodeTorrent struct {
-	InfoHash     [20]byte    `bencode:"info hash" json:"info_hash"`
-	Announce     string      `bencode:"announce" json:"announce"`
-	AnnounceList [][]any     `bencode:"announce list" json:"announce-list"`
-	CreationDate int64       `bencode:"creation date" json:"creation date"`
-	Info         BencodeInfo `bencode:"info" json:"info"`
-}
-
 type BencodeParser struct {
 	numDictsInInfoParsed int8   // number of dict value's parsed within the info key, used to understand when we are not in info anymore
 	captureBytes         bool   // tells the parser when to capture bytes for info_hash calculation

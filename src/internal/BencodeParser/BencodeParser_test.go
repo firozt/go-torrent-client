@@ -7,6 +7,8 @@ import (
 	"os"
 	"reflect"
 	"testing"
+
+	torrent "github.com/firozt/go-torrent/src/internal/Torrent"
 )
 
 func TestParseString(t *testing.T) {
@@ -238,20 +240,20 @@ func TestParseList(t *testing.T) {
 func TestPackage(t *testing.T) {
 	type TestCase struct {
 		fileName       string
-		expectedOutput *BencodeTorrent
+		expectedOutput *torrent.RawTorrentData
 		throwsError    bool
 	}
 	// files with test data info
 	testcase := []TestCase{
 		{
 			fileName: "alice.torrent",
-			expectedOutput: &BencodeTorrent{
+			expectedOutput: &torrent.RawTorrentData{
 				CreationDate: 1452468725091,
 				InfoHash: [20]byte{
 					0x72, 0x2f, 0xe6, 0x5b, 0x2a, 0xa2, 0x6d, 0x14,
 					0xf3, 0x5b, 0x4a, 0xd6, 0x27, 0xd2, 0x02, 0x36,
 					0xe4, 0x81, 0xd9, 0x24,
-				}, Info: BencodeInfo{
+				}, Info: torrent.RawTorrentInfo{
 					Length:      163783,
 					Name:        "alice.txt",
 					PieceLength: 16384,
@@ -263,7 +265,7 @@ func TestPackage(t *testing.T) {
 		},
 		{
 			fileName: "cosmos-laundromat.torrent",
-			expectedOutput: &BencodeTorrent{
+			expectedOutput: &torrent.RawTorrentData{
 				Announce: "udp://tracker.leechers-paradise.org:6969",
 
 				AnnounceList: [][]any{
@@ -281,12 +283,12 @@ func TestPackage(t *testing.T) {
 					0xc9, 0xe1, 0x57, 0x63, 0xf7, 0x22, 0xf2, 0x3e, 0x98, 0xa2,
 					0x9d, 0xec, 0xdf, 0xae, 0x34, 0x1b, 0x98, 0xd5, 0x30, 0x56,
 				},
-				Info: BencodeInfo{
+				Info: torrent.RawTorrentInfo{
 					Length:      0, // multi-file torrent
 					Name:        "Cosmos Laundromat",
 					PieceLength: 262144,
 					Piece:       "",
-					Files: []BencodeFile{
+					Files: []torrent.RawTorrentFileField{
 						{Path: []string{"Cosmos Laundromat.en.srt"}, Length: 3945},
 						{Path: []string{"Cosmos Laundromat.es.srt"}, Length: 3911},
 						{Path: []string{"Cosmos Laundromat.fr.srt"}, Length: 4120},
@@ -300,7 +302,7 @@ func TestPackage(t *testing.T) {
 		},
 		{
 			fileName: "big-buck-bunny.torrent",
-			expectedOutput: &BencodeTorrent{
+			expectedOutput: &torrent.RawTorrentData{
 				Announce: "udp://tracker.leechers-paradise.org:6969",
 
 				AnnounceList: [][]any{
@@ -319,12 +321,12 @@ func TestPackage(t *testing.T) {
 					0xb0, 0xbb, 0xf8, 0x13, 0x23, 0xd8, 0x70, 0x62,
 					0xdb, 0x1f, 0x6d, 0x1c,
 				},
-				Info: BencodeInfo{
+				Info: torrent.RawTorrentInfo{
 					Length:      0,
 					Name:        "Big Buck Bunny",
 					PieceLength: 262144,
 					Piece:       "",
-					Files: []BencodeFile{
+					Files: []torrent.RawTorrentFileField{
 						{Path: []string{"Big Buck Bunny.en.srt"}, Length: 140},
 						{Path: []string{"Big Buck Bunny.mp4"}, Length: 276134947},
 						{Path: []string{"poster.jpg"}, Length: 310380},
@@ -336,7 +338,7 @@ func TestPackage(t *testing.T) {
 
 		{
 			fileName: "sintel.torrent",
-			expectedOutput: &BencodeTorrent{
+			expectedOutput: &torrent.RawTorrentData{
 				Announce: "udp://tracker.leechers-paradise.org:6969",
 
 				AnnounceList: [][]any{
@@ -355,12 +357,12 @@ func TestPackage(t *testing.T) {
 					0x1e, 0x09, 0xd8, 0x31, 0xdf, 0x67, 0x48, 0xd5,
 					0x66, 0x09, 0x5a, 0x10,
 				},
-				Info: BencodeInfo{
+				Info: torrent.RawTorrentInfo{
 					Length:      0, // multi-file torrent
 					Name:        "Sintel",
 					PieceLength: 131072,
 					Piece:       "",
-					Files: []BencodeFile{
+					Files: []torrent.RawTorrentFileField{
 						{Path: []string{"Sintel.de.srt"}, Length: 1652},
 						{Path: []string{"Sintel.en.srt"}, Length: 1514},
 						{Path: []string{"Sintel.es.srt"}, Length: 1554},
@@ -380,7 +382,7 @@ func TestPackage(t *testing.T) {
 
 		{
 			fileName: "wired-cd.torrent",
-			expectedOutput: &BencodeTorrent{
+			expectedOutput: &torrent.RawTorrentData{
 				Announce: "udp://tracker.leechers-paradise.org:6969",
 
 				AnnounceList: [][]any{
@@ -399,12 +401,12 @@ func TestPackage(t *testing.T) {
 					0xc3, 0x72, 0x71, 0x6a, 0x6a, 0x78, 0xb8, 0x18,
 					0x0e, 0xd4, 0xda, 0xd3,
 				},
-				Info: BencodeInfo{
+				Info: torrent.RawTorrentInfo{
 					Length:      0, // multi-file torrent
 					Name:        "The WIRED CD - Rip. Sample. Mash. Share",
 					PieceLength: 65536,
 					Piece:       "",
-					Files: []BencodeFile{
+					Files: []torrent.RawTorrentFileField{
 						{Path: []string{"01 - Beastie Boys - Now Get Busy.mp3"}, Length: 1964275},
 						{Path: []string{"02 - David Byrne - My Fair Lady.mp3"}, Length: 3610523},
 						{Path: []string{"03 - Zap Mama - Wadidyusay.mp3"}, Length: 2759377},
@@ -432,7 +434,7 @@ func TestPackage(t *testing.T) {
 	for _, tc := range testcase {
 		t.Run(tc.fileName, func(t *testing.T) {
 			r := readTestDataFile(tc.fileName)
-			var bencodeData BencodeTorrent
+			var bencodeData torrent.RawTorrentData
 			err := Read(r, &bencodeData)
 			if !tc.throwsError && err != nil {
 				t.Errorf("unexpected error thrown by Read - %s\n", err)

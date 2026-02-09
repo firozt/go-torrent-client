@@ -3,43 +3,13 @@ package torrentvalidator
 import (
 	"fmt"
 
-	bencodeparser "github.com/firozt/go-torrent/src/internal/BencodeParser"
+	torrent "github.com/firozt/go-torrent/src/internal/Torrent"
 )
-
-type torrentFile struct {
-	Name         string
-	Announce     string
-	AnnounceList []string
-	InfoHash     [20]byte
-	CreationDate uint64
-	PieceLength  uint64
-	Pieces       [][20]byte
-}
-
-type TorrentFileSFM struct {
-	torrentFile
-	Length uint64
-}
-
-type TorrentFileMFM struct {
-	torrentFile
-	Files []bencodeparser.BencodeFile
-}
-
-type Torrent interface {
-	IsMultiFile() bool
-}
-
-func (torrentFile) isMultiFile() bool {
-	panic("This struct should not be used to hold actual data, but should be abstract")
-}
-func (TorrentFileMFM) IsMultiFile() bool { return true }
-func (TorrentFileSFM) IsMultiFile() bool { return false }
 
 // entry, takes bencode data and verifies all fields,
 // makes sure its correct for either SFM or MFM
 // returns a Torrent interface struct and error value
-func ValidateBencodeData(data *bencodeparser.BencodeTorrent) (Torrent, error) {
+func ValidateBencodeData(data *torrent.RawTorrentData) (torrent.Torrent, error) {
 	// check its base
 	base, err := attemptParseBase(data)
 	if err != nil {
@@ -49,7 +19,7 @@ func ValidateBencodeData(data *bencodeparser.BencodeTorrent) (Torrent, error) {
 	// check if it can be SFM
 	SFMData, err := attemptParseSFM(data)
 	if err == nil {
-		SFMData.torrentFile = *base
+		SFMData.TorrentFile = *base
 		return SFMData, err
 	}
 
@@ -57,7 +27,7 @@ func ValidateBencodeData(data *bencodeparser.BencodeTorrent) (Torrent, error) {
 	MFMData, err := attemptParseMFM(data)
 
 	if err == nil {
-		MFMData.torrentFile = *base
+		MFMData.TorrentFile = *base
 		return MFMData, err
 	}
 
@@ -70,7 +40,7 @@ func ValidateBencodeData(data *bencodeparser.BencodeTorrent) (Torrent, error) {
 // info
 // ---- piece length
 // ---- piece
-func attemptParseBase(data *bencodeparser.BencodeTorrent) (*torrentFile, error) {
+func attemptParseBase(data *torrent.RawTorrentData) (*torrent.TorrentFile, error) {
 	if data.Announce == "" {
 		return nil, fmt.Errorf("data could not be parsed into a base torrent file, announce is empty")
 	}
@@ -93,7 +63,7 @@ func attemptParseBase(data *bencodeparser.BencodeTorrent) (*torrentFile, error) 
 		return nil, err
 	}
 
-	base := torrentFile{
+	base := torrent.TorrentFile{
 		Name:         data.Info.Name,
 		Announce:     data.Announce,
 		AnnounceList: flattenAnnounceList(data.AnnounceList),
@@ -135,7 +105,7 @@ func flattenAnnounceList(input [][]any) []string {
 	return out
 }
 
-func isInfoExist(info bencodeparser.BencodeInfo) bool {
+func isInfoExist(info torrent.RawTorrentInfo) bool {
 	if len(info.Piece) == 0 { // must have a piece string
 		return false
 	}
@@ -146,26 +116,26 @@ func isInfoExist(info bencodeparser.BencodeInfo) bool {
 	return true
 }
 
-func attemptParseSFM(data *bencodeparser.BencodeTorrent) (*TorrentFileSFM, error) {
+func attemptParseSFM(data *torrent.RawTorrentData) (*torrent.TorrentFileSFM, error) {
 	// check SFM specific values are set
 	if data.Info.Name == "" || data.Info.Length <= 0 {
-		return &TorrentFileSFM{}, fmt.Errorf("data could not be parsed into a SFM, info name is empty or info length is zero")
+		return &torrent.TorrentFileSFM{}, fmt.Errorf("data could not be parsed into a SFM, info name is empty or info length is zero")
 	}
 
-	sfm := &TorrentFileSFM{
+	sfm := &torrent.TorrentFileSFM{
 		Length: uint64(data.Info.Length),
 	}
 
 	return sfm, nil
 }
 
-func attemptParseMFM(data *bencodeparser.BencodeTorrent) (*TorrentFileMFM, error) {
+func attemptParseMFM(data *torrent.RawTorrentData) (*torrent.TorrentFileMFM, error) {
 	// check for MFM specific values are set
 	if len(data.Info.Files) < 1 { // checks that there exists atleast one file
 		return nil, fmt.Errorf("data could not be parsed into MFM, info files is empty")
 	}
-	mfm := TorrentFileMFM{
-		Files: []bencodeparser.BencodeFile{},
+	mfm := torrent.TorrentFileMFM{
+		Files: []torrent.RawTorrentFileField{},
 	}
 
 	for _, file := range data.Info.Files {
