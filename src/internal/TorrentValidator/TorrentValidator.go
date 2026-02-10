@@ -62,9 +62,10 @@ func attemptParseBase(data *torrent.RawTorrentData, torrentfile *torrent.Torrent
 		return err
 	}
 
+	flattendList := flattenAnnounceList(data.AnnounceList)
+	combinedAnnounce := append([]string{data.Announce}, flattendList...)
 	torrentfile.Name = data.Info.Name
-	torrentfile.Announce = data.Announce
-	torrentfile.AnnounceList = flattenAnnounceList(data.AnnounceList)
+	torrentfile.Announce = combinedAnnounce
 	torrentfile.PieceLength = uint64(data.Info.PieceLength)
 	torrentfile.Pieces = validPieceVal
 	torrentfile.InfoHash = data.InfoHash

@@ -5,8 +5,7 @@ package torrent
 // flattened torrentfile struct with better typing, enforcing field values types
 type TorrentFile struct {
 	Name         string
-	Announce     string
-	AnnounceList []string
+	Announce     []string
 	InfoHash     [20]byte
 	CreationDate uint64
 	PieceLength  uint64
@@ -42,5 +41,17 @@ type RawTorrentData struct {
 // ============ Methods  ============ //
 
 func (t *TorrentFile) IsMultiFile() bool {
-	return len(t.Files) > 0
+	if len(t.Files) > 0 && len(t.Files[0].Path) != 0 {
+		return true
+	}
+
+	if t.Length != 0 {
+		return false
+	}
+
+	panic("Torrentfile is neither SFM or MFM")
 }
+
+// func (t TorrentFile) BuildTrackerURL() (string, error) {
+// urlParsed, err := url.Parse(t.Announce)
+// }

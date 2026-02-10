@@ -32,10 +32,9 @@ func TestPackage(t *testing.T) {
 			},
 			expected: &torrent.TorrentFile{
 
-				Name:         "example.txt",
-				Announce:     "http://tracker.example.com/announce",
-				AnnounceList: []string{"http://tracker.example.com/announce"},
-				PieceLength:  16384,
+				Name:        "example.txt",
+				Announce:    []string{"http://tracker.example.com/announce", "http://tracker.example.com/announce"},
+				PieceLength: 16384,
 				Pieces: [][20]byte{
 					{
 						1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
@@ -66,10 +65,9 @@ func TestPackage(t *testing.T) {
 				CreationDate: 1672531201,
 			},
 			expected: &torrent.TorrentFile{
-				Name:         "music_album",
-				Announce:     "http://tracker.example.com/announce",
-				AnnounceList: []string{"http://tracker.example.com/announce", "http://backup.tracker.com/announce"},
-				PieceLength:  32768,
+				Name:        "music_album",
+				Announce:    []string{"http://tracker.example.com/announce", "http://tracker.example.com/announce", "http://backup.tracker.com/announce"},
+				PieceLength: 32768,
 				Pieces: [][20]byte{
 					{1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
 						11, 12, 13, 14, 15, 16, 17, 18, 19, 20},
