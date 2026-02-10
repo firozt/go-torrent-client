@@ -1,5 +1,10 @@
 package torrent
 
+import (
+	"net/url"
+	"strconv"
+)
+
 // ============ Struct Defs  ============ //
 
 // flattened torrentfile struct with better typing, enforcing field values types
@@ -52,6 +57,22 @@ func (t *TorrentFile) IsMultiFile() bool {
 	panic("Torrentfile is neither SFM or MFM")
 }
 
-// func (t TorrentFile) BuildTrackerURL() (string, error) {
-// urlParsed, err := url.Parse(t.Announce)
-// }
+// builds all tracker urls from announce list
+func (t TorrentFile) BuildTrackerUrl(announce string, peerId string, port uint16) (string, error) {
+
+	base, err := url.Parse(announce)
+	if err != nil {
+		return "", err
+	}
+	params := url.Values{
+		"info_hash":  []string{string(t.InfoHash[:])},
+		"peer_id":    []string{peerId},
+		"port":       []string{strconv.Itoa(int(port))},
+		"uploaded":   []string{"0"},
+		"downloaded": []string{"0"},
+		"compact":    []string{"1"},
+		"left":       []string{string(t.Length)},
+	}
+	base.RawQuery = params.Encode()
+	return announce + base.String(), nil
+}
