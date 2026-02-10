@@ -71,7 +71,7 @@ func (t TorrentFile) BuildTrackerUrl(announce string, peerId string, port uint16
 		"uploaded":   []string{"0"},
 		"downloaded": []string{"0"},
 		"compact":    []string{"1"},
-		"left":       []string{string(t.Length)},
+		"left":       []string{strconv.FormatUint(t.Length, 10)},
 	}
 	base.RawQuery = params.Encode()
 	return announce + base.String(), nil
