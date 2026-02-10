@@ -288,7 +288,7 @@ func TestPackage(t *testing.T) {
 					Name:        "Cosmos Laundromat",
 					PieceLength: 262144,
 					Piece:       "",
-					Files: []torrent.RawTorrentFileField{
+					Files: []torrent.TorrentFileField{
 						{Path: []string{"Cosmos Laundromat.en.srt"}, Length: 3945},
 						{Path: []string{"Cosmos Laundromat.es.srt"}, Length: 3911},
 						{Path: []string{"Cosmos Laundromat.fr.srt"}, Length: 4120},
@@ -326,7 +326,7 @@ func TestPackage(t *testing.T) {
 					Name:        "Big Buck Bunny",
 					PieceLength: 262144,
 					Piece:       "",
-					Files: []torrent.RawTorrentFileField{
+					Files: []torrent.TorrentFileField{
 						{Path: []string{"Big Buck Bunny.en.srt"}, Length: 140},
 						{Path: []string{"Big Buck Bunny.mp4"}, Length: 276134947},
 						{Path: []string{"poster.jpg"}, Length: 310380},
@@ -362,7 +362,7 @@ func TestPackage(t *testing.T) {
 					Name:        "Sintel",
 					PieceLength: 131072,
 					Piece:       "",
-					Files: []torrent.RawTorrentFileField{
+					Files: []torrent.TorrentFileField{
 						{Path: []string{"Sintel.de.srt"}, Length: 1652},
 						{Path: []string{"Sintel.en.srt"}, Length: 1514},
 						{Path: []string{"Sintel.es.srt"}, Length: 1554},
@@ -406,7 +406,7 @@ func TestPackage(t *testing.T) {
 					Name:        "The WIRED CD - Rip. Sample. Mash. Share",
 					PieceLength: 65536,
 					Piece:       "",
-					Files: []torrent.RawTorrentFileField{
+					Files: []torrent.TorrentFileField{
 						{Path: []string{"01 - Beastie Boys - Now Get Busy.mp3"}, Length: 1964275},
 						{Path: []string{"02 - David Byrne - My Fair Lady.mp3"}, Length: 3610523},
 						{Path: []string{"03 - Zap Mama - Wadidyusay.mp3"}, Length: 2759377},

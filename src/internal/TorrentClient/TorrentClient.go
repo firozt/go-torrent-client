@@ -7,7 +7,7 @@ import (
 type TorrentClient struct {
 }
 
-func (t *TorrentClient) StartTorrent(torrentData torrent.Torrent) {
+func (t *TorrentClient) StartTorrent(torrentData torrent.TorrentFile) {
 
 }
 

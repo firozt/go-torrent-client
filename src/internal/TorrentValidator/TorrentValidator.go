@@ -9,26 +9,25 @@ import (
 // entry, takes bencode data and verifies all fields,
 // makes sure its correct for either SFM or MFM
 // returns a Torrent interface struct and error value
-func ValidateBencodeData(data *torrent.RawTorrentData) (torrent.Torrent, error) {
+func ValidateBencodeData(data *torrent.RawTorrentData) (*torrent.TorrentFile, error) {
 	// check its base
-	base, err := attemptParseBase(data)
+
+	torrentfile := &torrent.TorrentFile{}
+	err := attemptParseBase(data, torrentfile)
 	if err != nil {
 		return nil, err
 	}
 
 	// check if it can be SFM
-	SFMData, err := attemptParseSFM(data)
-	if err == nil {
-		SFMData.TorrentFile = *base
-		return SFMData, err
+	parseErr := attemptParseSFM(data, torrentfile)
+	if parseErr == nil {
+		return torrentfile, err
 	}
 
 	// check if it can be MFM
-	MFMData, err := attemptParseMFM(data)
-
-	if err == nil {
-		MFMData.TorrentFile = *base
-		return MFMData, err
+	parseErr = attemptParseMFM(data, torrentfile)
+	if parseErr == nil {
+		return torrentfile, err
 	}
 
 	return nil, fmt.Errorf("data could not be parsed into either struct")
@@ -40,40 +39,39 @@ func ValidateBencodeData(data *torrent.RawTorrentData) (torrent.Torrent, error) 
 // info
 // ---- piece length
 // ---- piece
-func attemptParseBase(data *torrent.RawTorrentData) (*torrent.TorrentFile, error) {
+func attemptParseBase(data *torrent.RawTorrentData, torrentfile *torrent.TorrentFile) error {
 	if data.Announce == "" {
-		return nil, fmt.Errorf("data could not be parsed into a base torrent file, announce is empty")
+		return fmt.Errorf("data could not be parsed into a base torrent file, announce is empty")
 	}
 
 	if !isInfoExist(data.Info) {
-		return nil, fmt.Errorf("data could not be parsed into a base torrent file, info is invalid or empty")
+		return fmt.Errorf("data could not be parsed into a base torrent file, info is invalid or empty")
 	}
 
 	if data.Info.PieceLength < 0 {
-		return nil, fmt.Errorf("Piece length is negative, invalid for a torrentfile")
+		return fmt.Errorf("Piece length is negative, invalid for a torrentfile")
 	}
 
 	if data.CreationDate < 0 {
-		return nil, fmt.Errorf("Creation date is negative, invalid for a torrentfile")
+		return fmt.Errorf("Creation date is negative, invalid for a torrentfile")
 	}
 
 	validPieceVal, err := pieceStringToHashList(data.Info.Piece)
 
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	base := torrent.TorrentFile{
-		Name:         data.Info.Name,
-		Announce:     data.Announce,
-		AnnounceList: flattenAnnounceList(data.AnnounceList),
-		PieceLength:  uint64(data.Info.PieceLength),
-		Pieces:       validPieceVal,
-		InfoHash:     data.InfoHash,
-		CreationDate: uint64(data.CreationDate),
-	}
+	torrentfile.Name = data.Info.Name
+	torrentfile.Announce = data.Announce
+	torrentfile.AnnounceList = flattenAnnounceList(data.AnnounceList)
+	torrentfile.PieceLength = uint64(data.Info.PieceLength)
+	torrentfile.Pieces = validPieceVal
+	torrentfile.InfoHash = data.InfoHash
+	torrentfile.CreationDate = uint64(data.CreationDate)
+	torrentfile.Length = uint64(data.Info.Length)
 
-	return &base, nil
+	return nil
 }
 
 func pieceStringToHashList(pieces string) ([][20]byte, error) {
@@ -116,32 +114,37 @@ func isInfoExist(info torrent.RawTorrentInfo) bool {
 	return true
 }
 
-func attemptParseSFM(data *torrent.RawTorrentData) (*torrent.TorrentFileSFM, error) {
+func attemptParseSFM(data *torrent.RawTorrentData, torrentfile *torrent.TorrentFile) error {
 	// check SFM specific values are set
 	if data.Info.Name == "" || data.Info.Length <= 0 {
-		return &torrent.TorrentFileSFM{}, fmt.Errorf("data could not be parsed into a SFM, info name is empty or info length is zero")
+		return fmt.Errorf("data could not be parsed into a SFM, info name is empty or info length is zero")
 	}
 
-	sfm := &torrent.TorrentFileSFM{
-		Length: uint64(data.Info.Length),
+	if torrentfile == nil {
+		return fmt.Errorf("torrentfile is nil")
 	}
 
-	return sfm, nil
+	torrentfile.Name = data.Info.Name
+
+	return nil
 }
 
-func attemptParseMFM(data *torrent.RawTorrentData) (*torrent.TorrentFileMFM, error) {
+func attemptParseMFM(data *torrent.RawTorrentData, torrentfile *torrent.TorrentFile) error {
 	// check for MFM specific values are set
 	if len(data.Info.Files) < 1 { // checks that there exists atleast one file
-		return nil, fmt.Errorf("data could not be parsed into MFM, info files is empty")
+		return fmt.Errorf("data could not be parsed into MFM, info files is empty")
 	}
-	mfm := torrent.TorrentFileMFM{
-		Files: []torrent.RawTorrentFileField{},
-	}
+	files := []torrent.TorrentFileField{}
 
 	for _, file := range data.Info.Files {
-		mfm.Files = append(mfm.Files, file)
+		files = append(files, file)
 	}
 
-	return &mfm, nil
+	if torrentfile == nil {
+		return fmt.Errorf("torrentfile is nil")
+	}
 
+	torrentfile.Files = files
+
+	return nil
 }

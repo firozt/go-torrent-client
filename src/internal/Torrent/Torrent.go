@@ -2,6 +2,7 @@ package torrent
 
 // ============ Struct Defs  ============ //
 
+// flattened torrentfile struct with better typing, enforcing field values types
 type TorrentFile struct {
 	Name         string
 	Announce     string
@@ -10,33 +11,22 @@ type TorrentFile struct {
 	CreationDate uint64
 	PieceLength  uint64
 	Pieces       [][20]byte
-}
-
-type TorrentFileSFM struct {
-	TorrentFile
-	Length uint64
-}
-
-type TorrentFileMFM struct {
-	TorrentFile
-	Files []RawTorrentFileField
-}
-
-type Torrent interface {
-	IsMultiFile() bool
+	Length       uint64
+	Files        []TorrentFileField
 }
 
 // ============ Raw Data Structs  ============ //
 
+// raw direct representation of the bencode struct
 type RawTorrentInfo struct {
-	Name        string                `bencode:"name" json:"name"`
-	Length      int64                 `bencode:"length" json:"length"`
-	PieceLength int64                 `bencode:"piece length" json:"piece length"`
-	Piece       string                `bencode:"pieces" json:"pieces"`
-	Files       []RawTorrentFileField `bencode:"files" json:"files"`
+	Name        string             `bencode:"name" json:"name"`
+	Length      int64              `bencode:"length" json:"length"`
+	PieceLength int64              `bencode:"piece length" json:"piece length"`
+	Piece       string             `bencode:"pieces" json:"pieces"`
+	Files       []TorrentFileField `bencode:"files" json:"files"`
 }
 
-type RawTorrentFileField struct {
+type TorrentFileField struct {
 	Path   []string `bencode:"path" json:"path"`
 	Length int64    `bencode:"length" json:"length"`
 }
@@ -51,8 +41,6 @@ type RawTorrentData struct {
 
 // ============ Methods  ============ //
 
-func (TorrentFile) IsMultiFile() bool {
-	panic("This struct should not be used to hold actual data, but should be abstract")
+func (t *TorrentFile) IsMultiFile() bool {
+	return len(t.Files) > 0
 }
-func (TorrentFileMFM) IsMultiFile() bool { return true }
-func (TorrentFileSFM) IsMultiFile() bool { return false }
