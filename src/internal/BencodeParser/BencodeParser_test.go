@@ -1,6 +1,7 @@
 package bencodeparser
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"log"
@@ -9,6 +10,7 @@ import (
 	"testing"
 
 	torrent "github.com/firozt/go-torrent/src/internal/Torrent"
+	torrentclient "github.com/firozt/go-torrent/src/internal/TorrentClient"
 )
 
 func TestParseString(t *testing.T) {
@@ -237,7 +239,7 @@ func TestParseList(t *testing.T) {
 	}
 }
 
-func TestPackage(t *testing.T) {
+func TestPackageTorrentData(t *testing.T) {
 	type TestCase struct {
 		fileName       string
 		expectedOutput *torrent.RawTorrentData
@@ -450,6 +452,67 @@ func TestPackage(t *testing.T) {
 	}
 }
 
+func TestPackageTorrentTrackerResponseData(t *testing.T) {
+	type TestCase struct {
+		name           string
+		input          []byte // raw bencode data
+		expectedOutput torrentclient.TrackerResponse
+		throwsError    bool
+	}
+
+	testcases := []TestCase{
+		{
+			name: "simple tracker response",
+			input: []byte(
+				"d8:completei5e10:incompletei2e8:intervali1800e7:tracker10:tracker1235:peers12:\x7f\x00\x00\x01\x1a\xe1\xc0\xa8\x00\x02\x1a\xe1e",
+			),
+			expectedOutput: torrentclient.TrackerResponse{
+				FailureReason: "",
+				Interval:      1800,
+				TrackerId:     "tracker123",
+				Complete:      5,
+				Incomplete:    2,
+				// Peers: []torrentclient.PeerInfo{
+				// 	{
+				// 		PeerID:         [20]byte{1, 2, 3},
+				// 		IP:             "127.0.0.1",
+				// 		Port:           6881,
+				// 		AmChoking:      false,
+				// 		AmInterested:   false,
+				// 		PeerChoking:    true,
+				// 		PeerInterested: false,
+				// 		LastSeen:       1700000000,
+				// 	},
+				// },
+				Peers: "",
+			},
+			throwsError: false,
+		},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			r := bytes.NewReader(tc.input) // create a reader from bytes
+
+			var resp torrentclient.TrackerResponse
+			err := Read(r, &resp) // parse bencode from reader
+
+			if !tc.throwsError && err != nil {
+				t.Errorf("unexpected error thrown - %s", err)
+				return
+			}
+
+			resp.Peers = ""
+			if !reflect.DeepEqual(resp, tc.expectedOutput) {
+				t.Errorf(
+					"parsed TrackerResponse differs from expected\n got:\n%+v\nwanted:\n%+v\n",
+					resp,
+					tc.expectedOutput,
+				)
+			}
+		})
+	}
+}
 func readTestDataFile(filename string) io.Reader {
 	testdataDir := "../testdata"
 	f, err := os.Open(fmt.Sprintf("%s/%s", testdataDir, filename))

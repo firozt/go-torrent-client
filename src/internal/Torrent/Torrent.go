@@ -1,6 +1,7 @@
 package torrent
 
 import (
+	"fmt"
 	"net/url"
 	"strconv"
 )
@@ -57,13 +58,35 @@ func (t *TorrentFile) IsMultiFile() bool {
 	panic("Torrentfile is neither SFM or MFM")
 }
 
-// builds all tracker urls from announce list
+// builds a tracker url given an announce url string
 func (t TorrentFile) BuildTrackerUrl(announce string, peerId string, port uint16) (string, error) {
+	_, err := url.Parse(announce)
 
-	base, err := url.Parse(announce)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("invalid url give %s, ", announce)
 	}
+
+	return announce + "?" + t.BuildParams(peerId, port), nil
+
+}
+
+func (t TorrentFile) BuildAllTrackerUrl(peerId string, port uint16) []string {
+
+	var trackerUrls []string
+	params := t.BuildParams(peerId, port)
+
+	for _, announceUrl := range t.Announce {
+		_, err := url.Parse(announceUrl)
+		if err != nil {
+			continue
+		}
+		trackerUrls = append(trackerUrls, announceUrl+"?"+params)
+	}
+
+	return trackerUrls
+}
+
+func (t TorrentFile) BuildParams(peerId string, port uint16) string {
 	params := url.Values{
 		"info_hash":  []string{string(t.InfoHash[:])},
 		"peer_id":    []string{peerId},
@@ -73,6 +96,6 @@ func (t TorrentFile) BuildTrackerUrl(announce string, peerId string, port uint16
 		"compact":    []string{"1"},
 		"left":       []string{strconv.FormatUint(t.Length, 10)},
 	}
-	base.RawQuery = params.Encode()
-	return announce + base.String(), nil
+	return params.Encode()
+
 }
