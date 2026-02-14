@@ -1,5 +1,10 @@
 package torrentclient
 
+import (
+	peers "github.com/firozt/go-torrent/src/internal/Peers"
+	// torrent "github.com/firozt/go-torrent/src/internal/Torrent"
+)
+
 // ========== Struct Defs =========== //
 
 // stores state for a client
@@ -9,32 +14,21 @@ type TorrentClient struct {
 	Uploaded      uint64
 	Downloaded    uint64
 	Left          uint64
-	ActivePeers   []PeerInfo
+	ActivePeers   []peers.PeerInfo
 	RateLimitUp   uint64
 	RateLimitDown uint64
 }
 
 // stores peer info returned from trackers
 
-type PeerInfo struct {
-	PeerID         [20]byte `json:"peer_id"`
-	IP             string   `json:"ip"`
-	Port           uint16   `json:"port"`
-	AmChoking      bool     `json:"am_choking"`
-	AmInterested   bool     `json:"am_interested"`
-	PeerChoking    bool     `json:"peer_choking"`
-	PeerInterested bool     `json:"peer_interested"`
-	LastSeen       int64    `json:"last_seen"` // Unix timestamp
-}
-
 type TrackerResponse struct {
-	FailureReason string `json:"failure_reason"`
-	Interval      int64  `json:"interval"`
-	TrackerId     string `json:"tracker"`
-	Complete      int64  `json:"complete"`
-	Incomplete    int64  `json:"incomplete"`
-	// Peers         []PeerInfo `json:"peers"`
-	Peers string `json:"peers"`
+	FailureReason string            `json:"failure_reason"`
+	Interval      int64             `json:"interval"`
+	TrackerId     string            `json:"tracker"`
+	Complete      int64             `json:"complete"`
+	Incomplete    int64             `json:"incomplete"`
+	Peers         *[]peers.PeerInfo // holds parsed info from peers blob
+	rawPeers      string            `json:"peers"`
 }
 
 // ========== Method Defs =========== //
@@ -43,9 +37,13 @@ func (t *TorrentClient) GetPeerStringId() string {
 	return string(t.PeerID[:])
 }
 
-// func (t *TorrentClient) StartTorrent(torrentfile torrent.TorrentFile) {
-// try all announce urls, use first working
-// trackerUrls := torrentfile.BuildAllTrackerUrl(t.GetPeerStringId(), 1234)
+// func [](t *TorrentClient) StartTorrent(torrentfile torrent.TorrentFile) {
+// 	// try all announce urls, use first working
+// 	trackerUrls := torrentfile.BuildAllTrackerUrl(t.GetPeerStringId(), 1234)
+//
+// }
+
+// func (t *TorrentClient) getTrackerResponse() (, error) {
 
 // }
 

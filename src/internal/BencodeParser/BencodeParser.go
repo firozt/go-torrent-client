@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"math"
 	"reflect"
 	"strconv"
 )
@@ -91,6 +90,13 @@ func (b *BencodeParser) peekToken() (byte, error) {
 	return b.buf[b.cur_idx], nil
 }
 
+/*
+@params
+reader - reader object that represents the input stream
+v - any struct in which bencode fields will be injected to
+@returns
+returns nil reader or unparsable errors
+*/
 func Read(reader io.Reader, v any) error {
 	if reader == nil {
 		return fmt.Errorf("No reader supplied")
@@ -114,8 +120,7 @@ func Read(reader io.Reader, v any) error {
 }
 
 func (b *BencodeParser) irToBencode(ir map[string]any, data any) error {
-	fmt.Println("PRINTING BELOW")
-	prettyPrintMap(ir)
+	// prettyPrintMap(ir)
 	// Convert IR → struct via JSON (bridge, not ideal but workable)
 	marshalled, err := json.Marshal(ir)
 	if err != nil {
@@ -161,37 +166,6 @@ func setInfoHash(data any, infoBytes []byte) error {
 	}
 
 	return fmt.Errorf("InfoHash field is wrong type")
-}
-
-func asNonNegativeUint64(v any) (uint64, bool) {
-	switch n := v.(type) {
-	case int64:
-		if n < 0 {
-			return 0, false
-		}
-		return uint64(n), true
-
-	case int:
-		if n < 0 {
-			return 0, false
-		}
-		return uint64(n), true
-
-	case float64:
-		// JSON numbers often come through as float64
-		if n < 0 || math.Trunc(n) != n {
-			return 0, false
-		}
-		return uint64(n), true
-
-	default:
-		return 0, false
-	}
-}
-
-func asPositiveUint64(v any) (uint64, bool) {
-	u, ok := asNonNegativeUint64(v)
-	return u, ok && u > 0
 }
 
 func prettyPrintMap(x map[string]any) {

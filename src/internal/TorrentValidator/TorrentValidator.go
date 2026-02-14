@@ -2,7 +2,6 @@ package torrentvalidator
 
 import (
 	"fmt"
-
 	torrent "github.com/firozt/go-torrent/src/internal/Torrent"
 )
 
