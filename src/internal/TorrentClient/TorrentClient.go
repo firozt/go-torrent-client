@@ -14,7 +14,7 @@ type TorrentClient struct {
 	Uploaded      uint64
 	Downloaded    uint64
 	Left          uint64
-	ActivePeers   []peers.PeerInfo
+	ActivePeers   []peers.Peer
 	RateLimitUp   uint64
 	RateLimitDown uint64
 }
@@ -22,13 +22,13 @@ type TorrentClient struct {
 // stores peer info returned from trackers
 
 type TrackerResponse struct {
-	FailureReason string            `json:"failure_reason"`
-	Interval      int64             `json:"interval"`
-	TrackerId     string            `json:"tracker"`
-	Complete      int64             `json:"complete"`
-	Incomplete    int64             `json:"incomplete"`
-	Peers         *[]peers.PeerInfo // holds parsed info from peers blob
-	rawPeers      string            `json:"peers"`
+	FailureReason string        `json:"failure_reason"`
+	Interval      int64         `json:"interval"`
+	TrackerId     string        `json:"tracker"`
+	Complete      int64         `json:"complete"`
+	Incomplete    int64         `json:"incomplete"`
+	Peers         *[]peers.Peer // holds parsed info from peers blob
+	rawPeers      string        `json:"peers"`
 }
 
 // ========== Method Defs =========== //
