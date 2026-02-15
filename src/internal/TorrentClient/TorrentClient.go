@@ -1,13 +1,18 @@
+// Package torrentclient that contains the client logic, high level package
 package torrentclient
 
 import (
+	"fmt"
+	"net/url"
+
 	peers "github.com/firozt/go-torrent/src/internal/Peers"
+	torrent "github.com/firozt/go-torrent/src/internal/Torrent"
 	// torrent "github.com/firozt/go-torrent/src/internal/Torrent"
 )
 
 // ========== Struct Defs =========== //
 
-// stores state for a client
+// TorrentClient stores state for a client
 type TorrentClient struct {
 	PeerID        [20]byte
 	Port          uint16
@@ -19,32 +24,54 @@ type TorrentClient struct {
 	RateLimitDown uint64
 }
 
-// stores peer info returned from trackers
-
+// TrackerResponse stores peer info returned from trackers
 type TrackerResponse struct {
 	FailureReason string        `json:"failure_reason"`
 	Interval      int64         `json:"interval"`
-	TrackerId     string        `json:"tracker"`
+	TrackerID     string        `json:"tracker"`
 	Complete      int64         `json:"complete"`
 	Incomplete    int64         `json:"incomplete"`
 	Peers         *[]peers.Peer // holds parsed info from peers blob
-	rawPeers      string        `json:"peers"`
+	RawPeers      string        `json:"peers"`
 }
 
 // ========== Method Defs =========== //
 
-func (t *TorrentClient) GetPeerStringId() string {
+func (t *TorrentClient) GetPeerStringID() string {
 	return string(t.PeerID[:])
 }
 
-// func [](t *TorrentClient) StartTorrent(torrentfile torrent.TorrentFile) {
-// 	// try all announce urls, use first working
-// 	trackerUrls := torrentfile.BuildAllTrackerUrl(t.GetPeerStringId(), 1234)
-//
-// }
+func (t *TorrentClient) StartTorrent(torrentfile torrent.TorrentFile) {
+	// try all announce urls, use first working
+	trackerURLS := torrentfile.BuildAllTrackerURL(string(t.PeerID[:]), 12345)
 
-// func (t *TorrentClient) getTrackerResponse() (, error) {
+	for _, tracker := range trackerURLS {
+		_, trackerErr := t.getTrackerResponse(tracker)
 
-// }
+		if trackerErr != nil {
+			continue
+		}
+	}
 
-// func (t *TorrentClient) RequestTrackerServer(trackerUrl string)
+}
+
+// url can either point to a http server or a udp server
+func (t *TorrentClient) getTrackerResponse(trackerURL string) (*TrackerResponse, error) {
+	u, err := url.Parse(trackerURL)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if u.Scheme == "udp" {
+
+	}
+
+	if u.Scheme == "http" {
+
+	}
+
+	return nil, fmt.Errorf("unknown url scheme - %s", u.Scheme)
+}
+
+func (t *TorrentClient) RequestTrackerServer(trackerUrl string)

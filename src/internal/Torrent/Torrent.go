@@ -1,3 +1,4 @@
+// Package torrent cotains representations of a .torrent file, contains methods that help with the bittorrent protocal
 package torrent
 
 import (
@@ -8,7 +9,7 @@ import (
 
 // ============ Struct Defs  ============ //
 
-// flattened torrentfile struct with better typing, enforcing field values types
+// TorrentFile flattened torrentfile struct with better typing, enforcing field values types
 type TorrentFile struct {
 	Name         string
 	Announce     []string
@@ -22,7 +23,7 @@ type TorrentFile struct {
 
 // ============ Raw Data Structs  ============ //
 
-// raw direct representation of the bencode struct
+// RawTorrentInfo raw direct representation of the bencode struct
 type RawTorrentInfo struct {
 	Name        string             `bencode:"name" json:"name"`
 	Length      int64              `bencode:"length" json:"length"`
@@ -58,38 +59,38 @@ func (t *TorrentFile) IsMultiFile() bool {
 	panic("Torrentfile is neither SFM or MFM")
 }
 
-// builds a tracker url given an announce url string
-func (t TorrentFile) BuildTrackerUrl(announce string, peerId string, port uint16) (string, error) {
+// BuildTrackerURL builds a tracker url given an announce url string
+func (t TorrentFile) BuildTrackerURL(announce string, peerID string, port uint16) (string, error) {
 	_, err := url.Parse(announce)
 
 	if err != nil {
 		return "", fmt.Errorf("invalid url give %s, ", announce)
 	}
 
-	return announce + "?" + t.BuildParams(peerId, port), nil
+	return announce + "?" + t.buildParams(peerID, port), nil
 
 }
 
-func (t TorrentFile) BuildAllTrackerUrl(peerId string, port uint16) []string {
+func (t TorrentFile) BuildAllTrackerURL(peerID string, port uint16) []string {
 
 	var trackerUrls []string
-	params := t.BuildParams(peerId, port)
+	params := t.buildParams(peerID, port)
 
-	for _, announceUrl := range t.Announce {
-		_, err := url.Parse(announceUrl)
+	for _, announceURL := range t.Announce {
+		_, err := url.Parse(announceURL)
 		if err != nil {
 			continue
 		}
-		trackerUrls = append(trackerUrls, announceUrl+"?"+params)
+		trackerUrls = append(trackerUrls, announceURL+"?"+params)
 	}
 
 	return trackerUrls
 }
 
-func (t TorrentFile) BuildParams(peerId string, port uint16) string {
+func (t TorrentFile) buildParams(peerID string, port uint16) string {
 	params := url.Values{
 		"info_hash":  []string{string(t.InfoHash[:])},
-		"peer_id":    []string{peerId},
+		"peer_id":    []string{peerID},
 		"port":       []string{strconv.Itoa(int(port))},
 		"uploaded":   []string{"0"},
 		"downloaded": []string{"0"},

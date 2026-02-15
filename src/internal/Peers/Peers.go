@@ -1,3 +1,4 @@
+// Package peers contains peer struct and the only way of instantiating it via Make function, that validates
 package peers
 
 import (
@@ -7,7 +8,6 @@ import (
 )
 
 type Peer struct {
-	// peerID         [20]byte
 	ipv4Addr net.IP
 	port     uint16
 	// amChoking      bool
@@ -17,38 +17,42 @@ type Peer struct {
 	// lastSeen       int64
 }
 
+// ErrInvalidPeerBlob occurs when raw peer blob data is malformed
 var ErrInvalidPeerBlob = fmt.Errorf("invalid Peer Blob")
 
-/*
-Takes a binary blop representing a list of peers
-A peer object is 6 bytes long
-Structure of peer is:
-
-bytes	0                   4	      6
-
-	|----|----|----|----|----|----|
-	---peer ipv4 addr--- peer port
-
-ip addr is stored in network order (big endian)
-*/
+// MakePeer parses a binary blob representing a list of peers.
+// Each peer is represented by 6 bytes in the following format:
+//
+// Bytes 0–3: IPv4 address (network order / big-endian)
+// Bytes 4–5: TCP port (network order / big-endian)
+//
+// Example memory layout for one peer:
+//
+// | byte0 | byte1 | byte2 | byte3 | byte4 | byte5 |
+// |---------------IP--------------|-----Port------|
+//
+// MakePeers returns a slice of Peer structs parsed from the blob.
 func MakePeer(peerBlob []byte) ([]Peer, error) {
-	res := make([]Peer, len(peerBlob)/6)
+	peerBlobSize := 6
+	portOffset := 4
 
-	// blop must be a multiple of 6
-	if len(peerBlob)%6 != 0 {
+	// blob must be a multiple of 6
+	if len(peerBlob)%peerBlobSize != 0 {
 		return nil, ErrInvalidPeerBlob
 	}
 
-	for i := 0; i < len(res)/6; i++ {
-		startIdx := 6 * i
-		// account for network byte order
-		var port uint16
-		binary.BigEndian.PutUint16(peerBlob[startIdx:startIdx+4], port)
+	res := make([]Peer, len(peerBlob)/peerBlobSize)
+	insertPos := 0
 
-		res = append(res, Peer{
-			ipv4Addr: net.IP(peerBlob[startIdx+4:]),
-			port:     port,
-		})
+	for i := 0; i < len(res); i++ {
+		startIdx := peerBlobSize * i
+		// account for network byte order
+		res[insertPos] = Peer{
+			ipv4Addr: net.IP(peerBlob[startIdx : startIdx+portOffset]),
+			port:     binary.BigEndian.Uint16(peerBlob[startIdx+portOffset : startIdx+peerBlobSize]),
+		}
+
+		insertPos++
 	}
 	return res, nil
 }
