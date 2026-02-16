@@ -8,7 +8,7 @@ import (
 )
 
 type TrackerResponse struct {
-	FailureReason string        `json:"failure_reason"`
+	FailureReason string        `json:"failure reason"`
 	Interval      int64         `json:"interval"`
 	TrackerID     string        `json:"tracker"`
 	Complete      int64         `json:"complete"`
@@ -20,6 +20,11 @@ type TrackerResponse struct {
 // GetPeers gets peers and if non existant will generate from raw peers
 // May return a raw peers does not exist error
 func (t *TrackerResponse) GetPeers() (*[]peers.Peer, error) {
+
+	if len(*t.peers) > 0 {
+		return t.peers, nil
+	}
+
 	if len(t.RawPeers) == 0 {
 		return nil, fmt.Errorf("peers does not exist for this variable")
 	}

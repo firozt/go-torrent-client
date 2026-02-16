@@ -99,7 +99,7 @@ returns nil reader or unparsable errors
 */
 func Read(reader io.Reader, v any) error {
 	if reader == nil {
-		return fmt.Errorf("No reader supplied")
+		return fmt.Errorf("no reader supplied")
 	}
 
 	b := makeBencodeParser(&reader)
@@ -120,15 +120,14 @@ func Read(reader io.Reader, v any) error {
 }
 
 func (b *BencodeParser) irToBencode(ir map[string]any, data any) error {
-	// prettyPrintMap(ir)
+	prettyPrintMap(ir)
 	// Convert IR → struct via JSON (bridge, not ideal but workable)
 	marshalled, err := json.Marshal(ir)
 	if err != nil {
 		return fmt.Errorf("failed to marshal IR: %w", err)
 	}
-
-	if err := json.Unmarshal(marshalled, data); err != nil {
-		return fmt.Errorf("failed to unmarshal IR into torrent struct: %w", err)
+	if unmarshalErr := json.Unmarshal(marshalled, data); unmarshalErr != nil {
+		return fmt.Errorf("failed to unmarshal IR into torrent struct: %w", unmarshalErr)
 	}
 
 	if err = setInfoHash(data, b.infoBytes); err != nil {
@@ -185,7 +184,8 @@ func (b *BencodeParser) unmarshal(data any) error {
 	// prettyPrintMap(IRData.(map[string]any))
 	err = b.irToBencode(IRData.(map[string]any), data)
 	if err != nil {
-		return fmt.Errorf("Unable to convert IR to struct %s\n", err)
+		// return fmt.Errorf("Unable to convert IR to struct %s\n", err)
+		return err
 	}
 
 	return nil

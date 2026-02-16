@@ -3,10 +3,13 @@ package torrentclient
 
 import (
 	"fmt"
+	"net/http"
 	"net/url"
 
+	bencodeparser "github.com/firozt/go-torrent/src/internal/BencodeParser"
 	peers "github.com/firozt/go-torrent/src/internal/Peers"
 	torrent "github.com/firozt/go-torrent/src/internal/Torrent"
+	tracker "github.com/firozt/go-torrent/src/internal/Tracker"
 	// torrent "github.com/firozt/go-torrent/src/internal/Torrent"
 )
 
@@ -22,17 +25,6 @@ type TorrentClient struct {
 	ActivePeers   []peers.Peer
 	RateLimitUp   uint64
 	RateLimitDown uint64
-}
-
-// TrackerResponse stores peer info returned from trackers
-type TrackerResponse struct {
-	FailureReason string        `json:"failure_reason"`
-	Interval      int64         `json:"interval"`
-	TrackerID     string        `json:"tracker"`
-	Complete      int64         `json:"complete"`
-	Incomplete    int64         `json:"incomplete"`
-	Peers         *[]peers.Peer // holds parsed info from peers blob
-	RawPeers      string        `json:"peers"`
 }
 
 // ========== Method Defs =========== //
@@ -56,7 +48,7 @@ func (t *TorrentClient) StartTorrent(torrentfile torrent.TorrentFile) {
 }
 
 // url can either point to a http server or a udp server
-func (t *TorrentClient) getTrackerResponse(trackerURL string) (*TrackerResponse, error) {
+func (t *TorrentClient) getTrackerResponse(trackerURL string) (*tracker.TrackerResponse, error) {
 	u, err := url.Parse(trackerURL)
 
 	if err != nil {
@@ -74,4 +66,29 @@ func (t *TorrentClient) getTrackerResponse(trackerURL string) (*TrackerResponse,
 	return nil, fmt.Errorf("unknown url scheme - %s", u.Scheme)
 }
 
-func (t *TorrentClient) RequestTrackerServer(trackerUrl string)
+func (t TorrentClient) handleHTTPScheme(httpURL *url.URL) (*tracker.TrackerResponse, error) {
+	if httpURL.Scheme != "http" {
+		return nil, fmt.Errorf("url provided is not a http url instead is %s", httpURL.Scheme)
+	}
+
+	// we need to make a request, and cancel out if it hangs as server may be down
+	resp, err := http.Get(httpURL.String())
+
+	if err != nil {
+		return nil, err
+	}
+
+	// read and parse body
+	defer resp.Body.Close()
+	trackerResponse := &tracker.TrackerResponse{}
+
+	err = bencodeparser.Read(resp.Body, trackerResponse)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return trackerResponse, nil
+}
+
+// func (t *TorrentClient) RequestTrackerServer(trackerUrl string) {}
