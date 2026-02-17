@@ -2,7 +2,10 @@
 package torrentclient
 
 import (
+	"encoding/binary"
 	"fmt"
+	"math"
+	"math/rand/v2"
 	"net/http"
 	"net/url"
 	"time"
@@ -96,10 +99,43 @@ func (t TorrentClient) handleHTTPScheme(httpURL *url.URL) (*tracker.TrackerRespo
 	return trackerResponse, nil
 }
 
-// acording to udp spec, we must listen to the response on the same socket we sent the request from
-// func (t TorrentClient) handleUDPScheme(udpURL *url.URL) (*tracker.TrackerResponse, error) {
-// 	if udpURL.Scheme != "udp" {
-// 		return nil, fmt.Errorf("invalid scheme, wanted udp got %s", udpURL.Scheme)
-// 	}
-//
-// }
+/*
+=============================================================================================
+
+	Summary:
+
+	HandleUDPScheme sends an announce packet to a tracker server via UDP
+	all values are sent in network byte order (big endian)
+	The connect request looks like the followint (16 bytes)
+
+bytes	0	 2	  4 	   6	    8	    10	      12       14	16
+
+	|--------|--------|--------|--------|--------|--------|--------|--------|
+
+hexval   0x0000    0x0417   0x2710  0x1980 | 0x0000   0x0000  |    uint32       |
+
+label	|---------connection_id------------|------Action------|-Transaction_id--|
+
+	Meaning:
+
+	connection_id ->  fixed constant defined by the protocol 64bit int
+	action -> 	  action the sendee wants to accomplish (0 for connect), 32bit uint
+	transaction_id -> randomly generated uint32 value to match response request
+
+=============================================================================================
+*/
+func (t TorrentClient) handleUDPScheme(udpURL *url.URL) (*tracker.TrackerResponse, error) {
+	if udpURL.Scheme != "udp" {
+		return nil, fmt.Errorf("invalid scheme, wanted udp got %s", udpURL.Scheme)
+	}
+
+	transaction_id := uint32(rand.IntN(math.MaxUint32)) // 4 bytes
+	action := uint32(0x1)                               // 4 byte
+	connection_id := []bytes(0x41727101980)             // 8byte
+
+	msg := make([]byte, 16)
+
+	msg[0] = byte(binary.BigEndian.Uint64(connection_id))
+	return nil, nil
+
+}
