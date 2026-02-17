@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"time"
 
 	bencodeparser "github.com/firozt/go-torrent/src/internal/BencodeParser"
 	peers "github.com/firozt/go-torrent/src/internal/Peers"
@@ -60,7 +61,7 @@ func (t *TorrentClient) getTrackerResponse(trackerURL string) (*tracker.TrackerR
 	}
 
 	if u.Scheme == "http" {
-
+		return t.handleHTTPScheme(u)
 	}
 
 	return nil, fmt.Errorf("unknown url scheme - %s", u.Scheme)
@@ -72,7 +73,11 @@ func (t TorrentClient) handleHTTPScheme(httpURL *url.URL) (*tracker.TrackerRespo
 	}
 
 	// we need to make a request, and cancel out if it hangs as server may be down
-	resp, err := http.Get(httpURL.String())
+	client := &http.Client{
+		Timeout: 5 * time.Second,
+	}
+
+	resp, err := client.Get(httpURL.String())
 
 	if err != nil {
 		return nil, err
@@ -91,4 +96,10 @@ func (t TorrentClient) handleHTTPScheme(httpURL *url.URL) (*tracker.TrackerRespo
 	return trackerResponse, nil
 }
 
-// func (t *TorrentClient) RequestTrackerServer(trackerUrl string) {}
+// acording to udp spec, we must listen to the response on the same socket we sent the request from
+// func (t TorrentClient) handleUDPScheme(udpURL *url.URL) (*tracker.TrackerResponse, error) {
+// 	if udpURL.Scheme != "udp" {
+// 		return nil, fmt.Errorf("invalid scheme, wanted udp got %s", udpURL.Scheme)
+// 	}
+//
+// }

@@ -1,9 +1,12 @@
 package torrentclient
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"reflect"
 	"testing"
+	"time"
 
 	tracker "github.com/firozt/go-torrent/src/internal/Tracker"
 )
@@ -24,6 +27,12 @@ func TestHandleHTTPScheme(t *testing.T) {
 				FailureReason: "no info_hash parameter supplied",
 			},
 			throwsError: false,
+		},
+		{
+			testname:    "invalid scheme",
+			input:       "udp://tracker.dmcomic.org:2710/announce",
+			expected:    nil,
+			throwsError: true,
 		},
 	}
 
@@ -48,6 +57,30 @@ func TestHandleHTTPScheme(t *testing.T) {
 			}
 		})
 	}
+}
+
+func testHTTPURLSchemeSlowServer(t *testing.T) {
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(200 * time.Millisecond)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	client := TorrentClient{}
+	t.Run("Slow server check", func(t *testing.T) {
+		u, err := url.Parse(server.URL)
+
+		if err != nil {
+			t.Errorf("DEV ERR: cannot make server - %s", err)
+		}
+		_, serverErr := client.handleHTTPScheme(u)
+
+		if serverErr == nil {
+			t.Errorf("Expected an error did not recieve any")
+		}
+	})
+
 }
 
 /*
