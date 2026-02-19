@@ -40,7 +40,7 @@ func TestHandleHTTPScheme(t *testing.T) {
 		t.Run(tc.testname, func(t *testing.T) {
 			client := TorrentClient{}
 			u, _ := url.Parse(tc.input)
-			got, err := client.handleHTTPScheme(u)
+			got, err := client.httpHandshakeProtocol(u)
 
 			if tc.throwsError && err == nil {
 				t.Errorf("An error was expected however none were thrown")
@@ -74,7 +74,7 @@ func testHTTPURLSchemeSlowServer(t *testing.T) {
 		if err != nil {
 			t.Errorf("DEV ERR: cannot make server - %s", err)
 		}
-		_, serverErr := client.handleHTTPScheme(u)
+		_, serverErr := client.httpHandshakeProtocol(u)
 
 		if serverErr == nil {
 			t.Errorf("Expected an error did not recieve any")

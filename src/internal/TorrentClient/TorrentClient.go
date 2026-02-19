@@ -2,10 +2,12 @@
 package torrentclient
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
 	"math"
 	"math/rand/v2"
+	"net"
 	"net/http"
 	"net/url"
 	"time"
@@ -60,17 +62,17 @@ func (t *TorrentClient) getTrackerResponse(trackerURL string) (*tracker.TrackerR
 	}
 
 	if u.Scheme == "udp" {
-
+		t.udpHandshakeProtocol(u)
 	}
 
 	if u.Scheme == "http" {
-		return t.handleHTTPScheme(u)
+		return t.httpHandshakeProtocol(u)
 	}
 
 	return nil, fmt.Errorf("unknown url scheme - %s", u.Scheme)
 }
 
-func (t TorrentClient) handleHTTPScheme(httpURL *url.URL) (*tracker.TrackerResponse, error) {
+func (t TorrentClient) httpHandshakeProtocol(httpURL *url.URL) (*tracker.TrackerResponse, error) {
 	if httpURL.Scheme != "http" {
 		return nil, fmt.Errorf("url provided is not a http url instead is %s", httpURL.Scheme)
 	}
@@ -112,7 +114,7 @@ bytes	0	 2	  4 	   6	    8	    10	      12       14	16
 
 	|--------|--------|--------|--------|--------|--------|--------|--------|
 
-hexval   0x0000    0x0417   0x2710  0x1980 | 0x0000   0x0000  |    uint32       |
+hexval   0x0000    0x0417   0x2710  0x1980 | 0x0000   0x0001  |    uint32       |
 
 label	|---------connection_id------------|------Action------|-Transaction_id--|
 
@@ -124,18 +126,57 @@ label	|---------connection_id------------|------Action------|-Transaction_id--|
 
 =============================================================================================
 */
-func (t TorrentClient) handleUDPScheme(udpURL *url.URL) (*tracker.TrackerResponse, error) {
+func (t TorrentClient) udpHandshakeProtocol(udpURL *url.URL) (*tracker.TrackerResponse, error) {
 	if udpURL.Scheme != "udp" {
 		return nil, fmt.Errorf("invalid scheme, wanted udp got %s", udpURL.Scheme)
 	}
 
-	transaction_id := uint32(rand.IntN(math.MaxUint32)) // 4 bytes
-	action := uint32(0x1)                               // 4 byte
-	connection_id := []bytes(0x41727101980)             // 8byte
+	// build up message
+
+	transactionID := uint32(rand.IntN(math.MaxUint32)) // 4 bytes
+	action := uint32(0x1)                              // 4 byte
+	connectionID := uint64(0x41727101980)              // 8byte
 
 	msg := make([]byte, 16)
 
-	msg[0] = byte(binary.BigEndian.Uint64(connection_id))
-	return nil, nil
+	binary.BigEndian.PutUint64(msg, connectionID)
+	binary.BigEndian.PutUint32(msg[8:], action)
+	binary.BigEndian.PutUint32(msg[12:], transactionID)
+
+	// send msg to tracker server
+
+	raddr, err := net.ResolveUDPAddr("udp", udpURL.String())
+	if err != nil {
+		return nil, err
+	}
+
+	conn, err := net.DialUDP("udp", nil, raddr)
+	if err != nil {
+		return nil, err
+	}
+
+	defer conn.Close()
+
+	_, err = conn.Write(msg)
+	if err != nil {
+		return nil, err
+	}
+
+	// wait to recieve a response
+
+	conn.SetReadDeadline(time.Now().Add(5 * time.Second)) // give tracker server 5s to respond
+
+	buf := make([]byte, 1024)
+
+	n, _, err := conn.ReadFromUDP(buf)
+	if err != nil {
+		return nil, err
+	}
+
+	var resp tracker.TrackerResponse
+	// parse bencode  encoded data
+	err = bencodeparser.Read(bytes.NewReader(buf[:n]), &resp)
+
+	return &resp, err
 
 }
