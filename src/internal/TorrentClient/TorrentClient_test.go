@@ -22,7 +22,7 @@ func TestHandleHTTPScheme(t *testing.T) {
 	testcase := []TestCase{
 		{
 			testname: "sanity check",
-			input:    "http://tracker.dmcomic.org:2710/announce",
+			input:    "https://tracker.zhuqiy.com:443/announce",
 			expected: &tracker.TrackerResponse{
 				FailureReason: "no info_hash parameter supplied",
 			},
@@ -59,7 +59,7 @@ func TestHandleHTTPScheme(t *testing.T) {
 	}
 }
 
-func testHTTPURLSchemeSlowServer(t *testing.T) {
+func TestHTTPURLSchemeSlowServer(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		time.Sleep(200 * time.Millisecond)
@@ -81,6 +81,42 @@ func testHTTPURLSchemeSlowServer(t *testing.T) {
 		}
 	})
 
+}
+
+func TestSendConnectUDPReq(t *testing.T) {
+	type TestCase struct {
+		testname    string
+		input       string // tobe converted to url obj
+		expected    []byte
+		throwsError bool
+	}
+
+	testcase := []TestCase{
+		{
+			testname:    "sanity check",
+			input:       "udp://tracker.opentrackr.org:1337/announce",
+			throwsError: false,
+		},
+	}
+
+	for _, tc := range testcase {
+		t.Run(tc.testname, func(t *testing.T) {
+			u, _ := url.Parse(tc.input)
+			client := TorrentClient{}
+			got, gotErr := client.sendConnectUDPReq(u)
+
+			if tc.throwsError && gotErr == nil {
+				t.Errorf("Expected an error however recieved none")
+			}
+			if !tc.throwsError && gotErr != nil {
+				t.Errorf("An error was thrown none expected, %v", gotErr)
+			}
+
+			if got == 0 {
+				t.Errorf("Got and want are not equal\nGOT:\n%v\nWANT:\nNON-ZERO-NUM", got)
+			}
+		})
+	}
 }
 
 /*
