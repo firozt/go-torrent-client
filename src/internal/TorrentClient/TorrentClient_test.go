@@ -22,9 +22,9 @@ func TestHandleHTTPScheme(t *testing.T) {
 	testcase := []TestCase{
 		{
 			testname: "sanity check",
-			input:    "https://tracker.zhuqiy.com:443/announce",
+			input:    "https://tracker.moeblog.cn:443/announce?peer_id=-UT3530-6XfG2wk6wWLc&port=6881&uploaded=0&downloaded=0&left=1&compact=1&event=started",
 			expected: &tracker.TrackerResponse{
-				FailureReason: "no info_hash parameter supplied",
+				FailureReason: "Your client forgot to send your torrent's info_hash. Please upgrade your client.",
 			},
 			throwsError: false,
 		},
@@ -36,7 +36,7 @@ func TestHandleHTTPScheme(t *testing.T) {
 		},
 	}
 
-	for _, tc := range testcase {
+	for _, tc := range testcase[:] {
 		t.Run(tc.testname, func(t *testing.T) {
 			client := TorrentClient{}
 			u, _ := url.Parse(tc.input)
@@ -46,7 +46,6 @@ func TestHandleHTTPScheme(t *testing.T) {
 				t.Errorf("An error was expected however none were thrown")
 				return
 			}
-
 			if !tc.throwsError && err != nil {
 				t.Errorf("An error was thrown none expected, %v", err)
 				return

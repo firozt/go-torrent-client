@@ -192,7 +192,6 @@ func (b *BencodeParser) unmarshal(data any) error {
 }
 
 func (b *BencodeParser) parseValue() (any, error) {
-	// fmt.Printf("Attempting to parse key %s and index %d\n", string(b.buf[b.cur_idx]), b.cur_idx)
 	if b.cur_idx >= uint64(len(b.buf)) {
 		return nil, fmt.Errorf("index out of range of b.ffer")
 	}
