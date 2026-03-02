@@ -68,29 +68,36 @@ func (t *TorrentClient) GetPeerStringID() string {
 }
 
 func (t *TorrentClient) StartTorrent(torrentfile torrent.TorrentFile) {
-	// try all announce urls, use first working
-	trackerURLS := torrentfile.BuildAllTrackerURL(string(t.GetPeerStringID()), t.port)
 
-	for _, tracker := range trackerURLS {
-		_, trackerErr := t.getTrackerResponse(tracker)
+	var trackerResponse *tracker.TrackerResponse
+	var err error
 
-		if trackerErr != nil {
-			continue
+	for _, tracker := range torrentfile.Announce {
+		trackerResponse, err = t.getTrackerResponse(tracker, &torrentfile)
+
+		if err == nil {
+			break
 		}
+	}
+
+	if trackerResponse == nil {
+		panic("No valid tracker annoucne responses")
 	}
 
 }
 
 // url can either point to a http server or a udp server
-func (t *TorrentClient) getTrackerResponse(trackerURL string) (*tracker.TrackerResponse, error) {
+func (t *TorrentClient) getTrackerResponse(trackerURL string, torrentFile *torrent.TorrentFile) (*tracker.TrackerResponse, error) {
 	u, err := url.Parse(trackerURL)
 
 	if err != nil {
 		return nil, err
 	}
 
+	fmt.Println(u.Scheme)
+
 	if u.Scheme == "udp" {
-		t.udpHandshakeProtocol(u)
+		return t.udpHandshakeProtocol(u, torrentFile)
 	}
 
 	if u.Scheme == "http" || u.Scheme == "https" {
@@ -130,21 +137,22 @@ func (t TorrentClient) httpHandshakeProtocol(httpURL *url.URL) (*tracker.Tracker
 	return trackerResponse, nil
 }
 
-func (t TorrentClient) udpHandshakeProtocol(udpURL *url.URL) (*tracker.TrackerResponse, error) {
+func (t TorrentClient) udpHandshakeProtocol(udpURL *url.URL, torrentfile *torrent.TorrentFile) (*tracker.TrackerResponse, error) {
 	if udpURL.Scheme != "udp" {
 		return nil, fmt.Errorf("invalid scheme, wanted udp got %s", udpURL.Scheme)
 	}
 
 	// send connect request and get a valid transactionID
-	transactionID, err := t.sendConnectUDPReq(udpURL)
+	connectionID, err := t.sendConnectUDPReq(udpURL)
 
-	transactionID++
 	if err != nil {
 		return nil, err
 	}
 
-	return nil, nil
+	fmt.Printf("passed connect request with connID of %d, attempting announce request\n", connectionID)
 
+	// send announce request with returned connectionID for verification
+	return t.sendAnnounceReq(udpURL, connectionID, torrentfile)
 }
 
 /*
@@ -164,10 +172,10 @@ Offset  Size    Name    Value
 92      32-bit integer  num_want        -1 // default
 96      16-bit integer  port
 98
-
 sendAnnounceReq sends to the tracker a request to recieve valid peers
 */
-func (t TorrentClient) sendAnnounceReq(udpURL *url.URL, connectionID uint32, torrentfile torrent.TorrentFile) ([]peers.Peer, error) {
+
+func (t TorrentClient) sendAnnounceReq(udpURL *url.URL, connectionID uint64, torrentfile *torrent.TorrentFile) (*tracker.TrackerResponse, error) {
 	if udpURL.Scheme != "udp" {
 		return nil, fmt.Errorf("url scheme is not udp instead is %s ", udpURL.Host)
 	}
@@ -256,7 +264,9 @@ func (t TorrentClient) sendAnnounceReq(udpURL *url.URL, connectionID uint32, tor
 		return nil, fmt.Errorf("length of peer blob is not a valid size 6N")
 	}
 
-	return peers.MakePeer(peerBlob)
+	return &tracker.TrackerResponse{
+		RawPeers: peerBlob,
+	}, nil
 }
 
 /*
@@ -271,7 +281,7 @@ sendConnectUDPReq takes a udp url scheme and sends a connect request
 to the corresponding tracker server, returns the connectionID to be presented
 on each subsequent request to the tracker server from this ip:port combo until expired
 */
-func (t TorrentClient) sendConnectUDPReq(udpURL *url.URL) (uint32, error) {
+func (t TorrentClient) sendConnectUDPReq(udpURL *url.URL) (uint64, error) {
 	// check url protocol
 	if udpURL.Scheme != "udp" {
 		return 0, fmt.Errorf("url scheme is not udp instead is %s ", string(udpURL.Host))
@@ -305,7 +315,7 @@ func (t TorrentClient) sendConnectUDPReq(udpURL *url.URL) (uint32, error) {
 
 	responseAction := binary.BigEndian.Uint32(response[:4])
 	transactionID := binary.BigEndian.Uint32(response[4:8])
-	connectionID := binary.BigEndian.Uint32(response[8:])
+	connectionID := binary.BigEndian.Uint64(response[8:])
 
 	if responseAction != 0 {
 		return 0, fmt.Errorf("action does not have value 0, instead has %d", responseAction)

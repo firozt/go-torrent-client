@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	torrent "github.com/firozt/go-torrent/src/internal/Torrent"
 	tracker "github.com/firozt/go-torrent/src/internal/Tracker"
 )
 
@@ -114,6 +115,59 @@ func TestSendConnectUDPReq(t *testing.T) {
 			if got == 0 {
 				t.Errorf("Got and want are not equal\nGOT:\n%v\nWANT:\nNON-ZERO-NUM", got)
 			}
+		})
+	}
+}
+
+func TestUDPHandshake(t *testing.T) {
+	type Input struct {
+		url         string
+		torrentFile torrent.TorrentFile
+	}
+	type TestCase struct {
+		testname  string
+		input     Input
+		expected  tracker.TrackerResponse
+		throwsErr bool
+	}
+
+	testcases := []TestCase{
+		{
+			testname: "sanity check",
+			input: Input{
+				url: "udp://tracker.opentrackr.org:1337/announce",
+				torrentFile: torrent.TorrentFile{
+					InfoHash: [20]byte{
+						0x12, 0x34, 0x56, 0x78,
+						0x9a, 0xbc, 0xde, 0xf0,
+						0x11, 0x22, 0x33, 0x44,
+						0x55, 0x66, 0x77, 0x88,
+						0x99, 0xaa, 0xbb, 0xcc,
+					},
+				},
+			},
+
+			throwsErr: false,
+			expected: tracker.TrackerResponse{
+				FailureReason: "Your client forgot to send your torrent's info_hash. Please upgrade your client.",
+			},
+		},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.testname, func(t *testing.T) {
+			client := NewTorrentClient()
+			got, err := client.getTrackerResponse(tc.input.url, &tc.input.torrentFile)
+			if tc.throwsErr && err == nil {
+				t.Errorf("Expected an error however recieved none")
+			}
+			if !tc.throwsErr && err != nil {
+				t.Errorf("An error was thrown none expected, %v", err)
+			}
+			if reflect.DeepEqual(got, &tc.expected) {
+				t.Errorf("got and expected are not equal\nGOT:\n%v,WANTED:\n%v", got, tc.expected)
+			}
+
 		})
 	}
 }
