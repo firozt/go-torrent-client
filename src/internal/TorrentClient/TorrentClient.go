@@ -50,10 +50,6 @@ func NewTorrentClient() *TorrentClient {
 	}
 }
 
-func (t *TorrentClient) generateNewKey() {
-	t.key = randomUint32()
-}
-
 func random20Bytes() [20]byte {
 	var b [20]byte
 	_, err := rand.Read(b[:])
@@ -101,23 +97,30 @@ func (t *TorrentClient) getTrackerResponse(trackerURL string, torrentFile *torre
 	}
 
 	if u.Scheme == "http" || u.Scheme == "https" {
-		return t.httpHandshakeProtocol(u)
+		return t.httpHandshakeProtocol(u, torrentFile)
 	}
 
 	return nil, fmt.Errorf("unknown url scheme - %s", u.Scheme)
 }
 
-func (t TorrentClient) httpHandshakeProtocol(httpURL *url.URL) (*tracker.TrackerResponse, error) {
+func (t TorrentClient) httpHandshakeProtocol(httpURL *url.URL, torrentFile *torrent.TorrentFile) (*tracker.TrackerResponse, error) {
 	if httpURL.Scheme != "http" && httpURL.Scheme != "https" {
 		return nil, fmt.Errorf("url provided is not a http url instead is %s", httpURL.Scheme)
 	}
+
+	// add params to url
+
+	fullTrackerURL, _ := torrentFile.BuildTrackerURL(httpURL.String(), string(t.peerID[:]), 12345)
+
+	fmt.Println(fullTrackerURL)
+	fmt.Println(httpURL.String())
 
 	// we need to make a request, and cancel out if it hangs as server may be down
 	client := &http.Client{
 		Timeout: 5 * time.Second,
 	}
 
-	resp, err := client.Get(httpURL.String())
+	resp, err := client.Get(fullTrackerURL)
 
 	if err != nil {
 		return nil, err
