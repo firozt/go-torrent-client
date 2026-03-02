@@ -44,7 +44,7 @@ func MakePeer(peerBlob []byte) ([]Peer, error) {
 	res := make([]Peer, len(peerBlob)/peerBlobSize)
 	insertPos := 0
 
-	for i := 0; i < len(res); i++ {
+	for i := range len(res) {
 		startIdx := peerBlobSize * i
 		// account for network byte order
 		res[insertPos] = Peer{
