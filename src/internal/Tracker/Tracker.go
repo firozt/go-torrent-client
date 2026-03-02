@@ -14,7 +14,7 @@ type TrackerResponse struct {
 	Complete      int64         `json:"complete"`
 	Incomplete    int64         `json:"incomplete"`
 	peers         *[]peers.Peer // holds parsed info from peers blob
-	RawPeers      string        `json:"peers"`
+	RawPeers      []byte        `json:"peers"`
 }
 
 // GetPeers gets peers and if non existant will generate from raw peers

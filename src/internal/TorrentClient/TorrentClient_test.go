@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	torrent "github.com/firozt/go-torrent/src/internal/Torrent"
 	tracker "github.com/firozt/go-torrent/src/internal/Tracker"
 )
 
@@ -22,9 +23,9 @@ func TestHandleHTTPScheme(t *testing.T) {
 	testcase := []TestCase{
 		{
 			testname: "sanity check",
-			input:    "http://tracker.dmcomic.org:2710/announce",
+			input:    "https://tracker.moeblog.cn:443/announce?peer_id=-UT3530-6XfG2wk6wWLc&port=6881&uploaded=0&downloaded=0&left=1&compact=1&event=started",
 			expected: &tracker.TrackerResponse{
-				FailureReason: "no info_hash parameter supplied",
+				FailureReason: "Your client forgot to send your torrent's info_hash. Please upgrade your client.",
 			},
 			throwsError: false,
 		},
@@ -36,17 +37,16 @@ func TestHandleHTTPScheme(t *testing.T) {
 		},
 	}
 
-	for _, tc := range testcase {
+	for _, tc := range testcase[:] {
 		t.Run(tc.testname, func(t *testing.T) {
 			client := TorrentClient{}
 			u, _ := url.Parse(tc.input)
-			got, err := client.handleHTTPScheme(u)
+			got, err := client.httpHandshakeProtocol(u)
 
 			if tc.throwsError && err == nil {
 				t.Errorf("An error was expected however none were thrown")
 				return
 			}
-
 			if !tc.throwsError && err != nil {
 				t.Errorf("An error was thrown none expected, %v", err)
 				return
@@ -59,7 +59,7 @@ func TestHandleHTTPScheme(t *testing.T) {
 	}
 }
 
-func testHTTPURLSchemeSlowServer(t *testing.T) {
+func TestHTTPURLSchemeSlowServer(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		time.Sleep(200 * time.Millisecond)
@@ -74,13 +74,102 @@ func testHTTPURLSchemeSlowServer(t *testing.T) {
 		if err != nil {
 			t.Errorf("DEV ERR: cannot make server - %s", err)
 		}
-		_, serverErr := client.handleHTTPScheme(u)
+		_, serverErr := client.httpHandshakeProtocol(u)
 
 		if serverErr == nil {
 			t.Errorf("Expected an error did not recieve any")
 		}
 	})
 
+}
+
+func TestSendConnectUDPReq(t *testing.T) {
+	type TestCase struct {
+		testname    string
+		input       string // tobe converted to url obj
+		expected    []byte
+		throwsError bool
+	}
+
+	testcase := []TestCase{
+		{
+			testname:    "sanity check",
+			input:       "udp://tracker.opentrackr.org:1337/announce",
+			throwsError: false,
+		},
+	}
+
+	for _, tc := range testcase {
+		t.Run(tc.testname, func(t *testing.T) {
+			u, _ := url.Parse(tc.input)
+			client := TorrentClient{}
+			got, gotErr := client.sendConnectUDPReq(u)
+
+			if tc.throwsError && gotErr == nil {
+				t.Errorf("Expected an error however recieved none")
+			}
+			if !tc.throwsError && gotErr != nil {
+				t.Errorf("An error was thrown none expected, %v", gotErr)
+			}
+
+			if got == 0 {
+				t.Errorf("Got and want are not equal\nGOT:\n%v\nWANT:\nNON-ZERO-NUM", got)
+			}
+		})
+	}
+}
+
+func TestUDPHandshake(t *testing.T) {
+	type Input struct {
+		url         string
+		torrentFile torrent.TorrentFile
+	}
+	type TestCase struct {
+		testname  string
+		input     Input
+		expected  tracker.TrackerResponse
+		throwsErr bool
+	}
+
+	testcases := []TestCase{
+		{
+			testname: "sanity check",
+			input: Input{
+				url: "udp://tracker.opentrackr.org:1337/announce",
+				torrentFile: torrent.TorrentFile{
+					InfoHash: [20]byte{
+						0x12, 0x34, 0x56, 0x78,
+						0x9a, 0xbc, 0xde, 0xf0,
+						0x11, 0x22, 0x33, 0x44,
+						0x55, 0x66, 0x77, 0x88,
+						0x99, 0xaa, 0xbb, 0xcc,
+					},
+				},
+			},
+
+			throwsErr: false,
+			expected: tracker.TrackerResponse{
+				FailureReason: "Your client forgot to send your torrent's info_hash. Please upgrade your client.",
+			},
+		},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.testname, func(t *testing.T) {
+			client := NewTorrentClient()
+			got, err := client.getTrackerResponse(tc.input.url, &tc.input.torrentFile)
+			if tc.throwsErr && err == nil {
+				t.Errorf("Expected an error however recieved none")
+			}
+			if !tc.throwsErr && err != nil {
+				t.Errorf("An error was thrown none expected, %v", err)
+			}
+			if reflect.DeepEqual(got, &tc.expected) {
+				t.Errorf("got and expected are not equal\nGOT:\n%v,WANTED:\n%v", got, tc.expected)
+			}
+
+		})
+	}
 }
 
 /*
