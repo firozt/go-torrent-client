@@ -61,6 +61,7 @@ func TestHandleHTTPScheme(t *testing.T) {
 			u, _ := url.Parse(tc.input)
 			got, err := client.httpHandshakeProtocol(u, TF)
 
+			// err expected and none given
 			if tc.throwsError && err == nil {
 				t.Errorf("An error was expected however none were thrown")
 				return
