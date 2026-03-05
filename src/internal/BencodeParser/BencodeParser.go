@@ -91,6 +91,7 @@ func (b *BencodeParser) peekToken() (byte, error) {
 }
 
 /*
+Read takes in a reader and an object to place keys into
 @params
 reader - reader object that represents the input stream
 v - any struct in which bencode fields will be injected to
@@ -120,14 +121,17 @@ func Read(reader io.Reader, v any) error {
 }
 
 func (b *BencodeParser) irToBencode(ir map[string]any, data any) error {
-	// prettyPrintMap(ir)
+	// ir["peers"] = ""
+	prettyPrintMap(ir)
 	// Convert IR → struct via JSON (bridge, not ideal but workable)
 	marshalled, err := json.Marshal(ir)
 	if err != nil {
 		return fmt.Errorf("failed to marshal IR: %w", err)
 	}
 	if unmarshalErr := json.Unmarshal(marshalled, data); unmarshalErr != nil {
+		fmt.Printf("here ->%x", b.buf[b.cur_idx])
 		return fmt.Errorf("failed to unmarshal IR into torrent struct: %w", unmarshalErr)
+		// return fmt.Errorf("failed to unmarshal IR into torrent struct: %w\nData : \n%s", unmarshalErr, string(b.buf))
 	}
 
 	if err = setInfoHash(data, b.infoBytes); err != nil {
@@ -170,7 +174,7 @@ func setInfoHash(data any, infoBytes []byte) error {
 func prettyPrintMap(x map[string]any) {
 	bc, err := json.MarshalIndent(x, "", "  ")
 	if err != nil {
-		// fmt.PrintLn("error:", err)
+		fmt.Printf("error: %s", err)
 	}
 	fmt.Print(string(bc))
 }
@@ -178,7 +182,7 @@ func prettyPrintMap(x map[string]any) {
 func (b *BencodeParser) unmarshal(data any) error {
 	IRData, err := b.parseValue()
 	if err != nil {
-		return fmt.Errorf("Unable to parse bencode raw data - %s", err)
+		return fmt.Errorf("unable to parse bencode raw data - %s", err)
 	}
 
 	// prettyPrintMap(IRData.(map[string]any))

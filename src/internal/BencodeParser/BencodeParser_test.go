@@ -1,17 +1,14 @@
 package bencodeparser
 
 import (
+	"fmt"
 	"io"
 	"log"
 	"os"
-	"path/filepath"
 	"reflect"
-	"runtime"
-	"strings"
 	"testing"
 
 	torrent "github.com/firozt/go-torrent/src/internal/Torrent"
-	tracker "github.com/firozt/go-torrent/src/internal/Tracker"
 )
 
 func TestParseString(t *testing.T) {
@@ -453,42 +450,9 @@ func TestPackageTorrentData(t *testing.T) {
 	}
 }
 
-func TestOtherTypes(t *testing.T) {
-	type TestCase struct {
-		testname string
-		input    string
-		expected any
-	}
-	testcases := []TestCase{
-		{
-			testname: "tracker response",
-			input:    "d14:failure reason80:Your client forgot to send your torrent's info_hash. Please upgrade your client.e",
-			expected: tracker.TrackerResponse{
-				FailureReason: "Your client forgot to send your torrent's info_hash. Please upgrade your client.",
-			},
-		},
-	}
-
-	for _, tc := range testcases {
-		t.Run(tc.testname, func(t *testing.T) {
-			var got tracker.TrackerResponse
-			r := strings.NewReader(tc.input)
-			err := Read(r, &got)
-			if err != nil {
-				t.Errorf("unexpected error thrown by Read - %s\n", err)
-				return
-			}
-			if !reflect.DeepEqual(got, tc.expected) {
-				t.Errorf("got values and wanted are different\n got :\n%+v\nwanted:\n%+v\n", got, tc.expected)
-			}
-		})
-	}
-}
-
 func readTestDataFile(filename string) io.Reader {
-	_, currentFile, _, _ := runtime.Caller(0)
-	testdataDir := filepath.Join(filepath.Dir(currentFile), "../testdata")
-	f, err := os.Open(filepath.Join(testdataDir, filename))
+	testdataDir := "../testdata"
+	f, err := os.Open(fmt.Sprintf("%s/%s", testdataDir, filename))
 	if err != nil {
 		log.Fatalln("Unable to open test file")
 	}

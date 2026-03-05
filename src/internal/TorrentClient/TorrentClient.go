@@ -16,7 +16,6 @@ import (
 	peers "github.com/firozt/go-torrent/src/internal/Peers"
 	torrent "github.com/firozt/go-torrent/src/internal/Torrent"
 	tracker "github.com/firozt/go-torrent/src/internal/Tracker"
-	// torrent "github.com/firozt/go-torrent/src/internal/Torrent"
 )
 
 // ========== Struct Defs =========== //
@@ -36,10 +35,10 @@ type TorrentClient struct {
 
 // ========== Method Defs =========== //
 
-func NewTorrentClient() *TorrentClient {
+func NewTorrentClient(port uint16) *TorrentClient {
 	return &TorrentClient{
 		peerID:      random20Bytes(),
-		port:        12345,
+		port:        port,
 		uploaded:    0,
 		downloaded:  0,
 		left:        0,
@@ -48,10 +47,6 @@ func NewTorrentClient() *TorrentClient {
 		// RateLimitUp:
 		// RateLimitDown:
 	}
-}
-
-func (t *TorrentClient) generateNewKey() {
-	t.key = randomUint32()
 }
 
 func random20Bytes() [20]byte {
@@ -94,30 +89,35 @@ func (t *TorrentClient) getTrackerResponse(trackerURL string, torrentFile *torre
 		return nil, err
 	}
 
-	fmt.Println(u.Scheme)
-
 	if u.Scheme == "udp" {
 		return t.udpHandshakeProtocol(u, torrentFile)
 	}
 
 	if u.Scheme == "http" || u.Scheme == "https" {
-		return t.httpHandshakeProtocol(u)
+		return t.httpHandshakeProtocol(u, torrentFile)
 	}
 
 	return nil, fmt.Errorf("unknown url scheme - %s", u.Scheme)
 }
 
-func (t TorrentClient) httpHandshakeProtocol(httpURL *url.URL) (*tracker.TrackerResponse, error) {
+func (t TorrentClient) httpHandshakeProtocol(httpURL *url.URL, torrentFile *torrent.TorrentFile) (*tracker.TrackerResponse, error) {
 	if httpURL.Scheme != "http" && httpURL.Scheme != "https" {
 		return nil, fmt.Errorf("url provided is not a http url instead is %s", httpURL.Scheme)
 	}
+
+	// add params to url
+
+	fullTrackerURL, _ := torrentFile.BuildTrackerURL(httpURL.String(), string(t.peerID[:]), 12345)
+
+	// fmt.Println(fullTrackerURL)
+	// fmt.Println("https://tracker.moeblog.cn:443/announce?peer_id=%D3%1A%36%E9%AE%23%F7%33%67%EA%C6%7C%8E%70%F9%FC%D4%65%6A%B5&port=12345&uploaded=0&downloaded=0&left=1073741824&compact=1")
 
 	// we need to make a request, and cancel out if it hangs as server may be down
 	client := &http.Client{
 		Timeout: 5 * time.Second,
 	}
 
-	resp, err := client.Get(httpURL.String())
+	resp, err := client.Get(fullTrackerURL)
 
 	if err != nil {
 		return nil, err
@@ -127,13 +127,10 @@ func (t TorrentClient) httpHandshakeProtocol(httpURL *url.URL) (*tracker.Tracker
 	defer resp.Body.Close()
 	reader := bufio.NewReader(resp.Body)
 	trackerResponse := &tracker.TrackerResponse{}
-	// val, _ := io.ReadAll(resp.Body)
-	// fmt.Println(string(val))
 	err = bencodeparser.Read(reader, trackerResponse)
 	if err != nil {
 		return nil, err
 	}
-
 	return trackerResponse, nil
 }
 
@@ -327,6 +324,51 @@ func (t TorrentClient) sendConnectUDPReq(udpURL *url.URL) (uint64, error) {
 
 	return connectionID, nil
 
+}
+
+// PeerHandshakeProtocol attempts to start a connection to a peer using the peer communications protocol
+// this is always done via tcp or utp
+func (c TorrentClient) PeerHandshakeProtocol(peer peers.Peer, infoHash [20]byte) (*net.TCPConn, error) {
+	if len(peer.IP()) == 0 || peer.Port() == 0 {
+		return nil, fmt.Errorf("peer is malformed - %s", peer.Address())
+	}
+
+	// build initHandshakeMsg
+	initHandshakeMsg := peers.NewBitTorrentProtocolHandshake(infoHash, c.peerID)
+
+	// attempt to connect, 5 second timeout
+	conn, err := net.DialTimeout("tcp", peer.Address(), 5*time.Second)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+
+	// send init msg
+	conn.Write(initHandshakeMsg.SerializePeerHandshake())
+
+	// wait for a response 5 second timeout
+
+	readBuf := make([]byte, 1024)
+	conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	n, err := conn.Read(readBuf)
+	if err != nil {
+		return nil, err
+	}
+
+	if n != 68 {
+		return nil, fmt.Errorf("number of bytes returned is not 68, the length of the expected response instead its %d", n)
+	}
+
+	peerHandshakeResponse, err := peers.DeserializePeerHandshake([68]byte(readBuf))
+	if err != nil {
+		return nil, err
+	}
+
+	if peerHandshakeResponse.InfoHash != infoHash {
+		return nil, fmt.Errorf("the infohash returned in the handshake are not equivilant, expected %x, got %x", peerHandshakeResponse.InfoHash, infoHash)
+	}
+
+	return nil, nil
 }
 
 // genertic func that sends a message to a url over udp and waits 5s for a response and returns it

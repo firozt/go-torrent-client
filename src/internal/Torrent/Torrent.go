@@ -4,7 +4,7 @@ package torrent
 import (
 	"fmt"
 	"net/url"
-	"strconv"
+	"strings"
 )
 
 // ============ Struct Defs  ============ //
@@ -88,15 +88,24 @@ func (t TorrentFile) BuildAllTrackerURL(peerID string, port uint16) []string {
 }
 
 func (t TorrentFile) buildParams(peerID string, port uint16) string {
-	params := url.Values{
-		"info_hash":  []string{string(t.InfoHash[:])},
-		"peer_id":    []string{peerID},
-		"port":       []string{strconv.Itoa(int(port))},
-		"uploaded":   []string{"0"},
-		"downloaded": []string{"0"},
-		"compact":    []string{"1"},
-		"left":       []string{strconv.FormatUint(t.Length, 10)},
-	}
-	return params.Encode()
+	infoHash := encodeBinary(t.InfoHash[:])
+	peerIDEnc := encodeBinary([]byte(peerID)) // always safe
 
+	return fmt.Sprintf(
+		"info_hash=%s&peer_id=%s&port=%d&uploaded=0&downloaded=0&left=%d&compact=1",
+		infoHash,
+		peerIDEnc,
+		port,
+		t.Length,
+	)
+}
+func encodeBinary(b []byte) string {
+	var buf strings.Builder
+
+	for _, v := range b {
+		buf.WriteByte('%')
+		buf.WriteString(strings.ToUpper(fmt.Sprintf("%02x", v)))
+	}
+
+	return buf.String()
 }

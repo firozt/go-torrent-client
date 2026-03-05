@@ -23,9 +23,9 @@ func TestHandleHTTPScheme(t *testing.T) {
 	testcase := []TestCase{
 		{
 			testname: "sanity check",
-			input:    "https://tracker.moeblog.cn:443/announce?peer_id=-UT3530-6XfG2wk6wWLc&port=6881&uploaded=0&downloaded=0&left=1&compact=1&event=started",
+			input:    "https://torrent.ubuntu.com/announce",
 			expected: &tracker.TrackerResponse{
-				FailureReason: "Your client forgot to send your torrent's info_hash. Please upgrade your client.",
+				FailureReason: "Requested download is not authorized for use with this tracker.",
 			},
 			throwsError: false,
 		},
@@ -36,25 +36,56 @@ func TestHandleHTTPScheme(t *testing.T) {
 			throwsError: true,
 		},
 	}
-
+	TF := &torrent.TorrentFile{
+		Name:         "ubuntu-24.04.iso",
+		Announce:     []string{"https://torrent.ubuntu.com/announce"},
+		InfoHash:     [20]byte{'T', 'E', 'S', 'T', 'I', 'N', 'G', 'H', 'A', 'S', 'H'},
+		CreationDate: 1700000000,
+		PieceLength:  256 * 1024,
+		Pieces: [][20]byte{
+			[20]byte{'P', 'I', 'E', 'C', 'E', '0', '0', '1'},
+			[20]byte{'P', 'I', 'E', 'C', 'E', '0', '0', '2'},
+		},
+		Length: 1024 * 1024 * 1024,
+		Files: []torrent.TorrentFileField{
+			{
+				Path:   []string{"ubuntu-24.04.iso"},
+				Length: 1024 * 1024 * 1024,
+			},
+		},
+	}
 	for _, tc := range testcase[:] {
 		t.Run(tc.testname, func(t *testing.T) {
-			client := TorrentClient{}
-			u, _ := url.Parse(tc.input)
-			got, err := client.httpHandshakeProtocol(u)
+			client := NewTorrentClient(1234)
 
+			u, _ := url.Parse(tc.input)
+			got, err := client.httpHandshakeProtocol(u, TF)
+
+			// err expected and none given
 			if tc.throwsError && err == nil {
 				t.Errorf("An error was expected however none were thrown")
 				return
 			}
+
+			// err thrown none expected
 			if !tc.throwsError && err != nil {
 				t.Errorf("An error was thrown none expected, %v", err)
 				return
 			}
 
-			if !reflect.DeepEqual(got, tc.expected) {
-				t.Errorf("Got and want are not equal\nGOT:\n%v\nWANT:\n%v\n", *got, *tc.expected)
+			// valid err
+			if err != nil {
+				return
 			}
+
+			// compare only fields we can know before making the request
+			if tc.expected.FailureReason != got.FailureReason {
+				t.Errorf("Got and want are not equal\nGOT:\n%+v\nWANT:\n%+v\n", *got, *tc.expected)
+			}
+
+			// if !reflect.DeepEqual(got, tc.expected) {
+			// 	t.Errorf("Got and want are not equal\nGOT:\n%+v\nWANT:\n%+v\n", *got, *tc.expected)
+			// }
 		})
 	}
 }
@@ -74,7 +105,7 @@ func TestHTTPURLSchemeSlowServer(t *testing.T) {
 		if err != nil {
 			t.Errorf("DEV ERR: cannot make server - %s", err)
 		}
-		_, serverErr := client.httpHandshakeProtocol(u)
+		_, serverErr := client.httpHandshakeProtocol(u, &torrent.TorrentFile{})
 
 		if serverErr == nil {
 			t.Errorf("Expected an error did not recieve any")
@@ -156,7 +187,7 @@ func TestUDPHandshake(t *testing.T) {
 
 	for _, tc := range testcases {
 		t.Run(tc.testname, func(t *testing.T) {
-			client := NewTorrentClient()
+			client := NewTorrentClient(1234)
 			got, err := client.getTrackerResponse(tc.input.url, &tc.input.torrentFile)
 			if tc.throwsErr && err == nil {
 				t.Errorf("Expected an error however recieved none")
