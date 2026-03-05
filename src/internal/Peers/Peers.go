@@ -5,11 +5,13 @@ import (
 	"encoding/binary"
 	"fmt"
 	"net"
+	"strconv"
 )
 
 type Peer struct {
 	ipv4Addr net.IP
 	port     uint16
+	PeerID   [20]byte
 	// amChoking      bool
 	// amInterested   bool
 	// peerChoking    bool
@@ -55,4 +57,83 @@ func MakePeer(peerBlob []byte) ([]Peer, error) {
 		insertPos++
 	}
 	return res, nil
+}
+
+func (p Peer) IP() net.IP {
+	return p.ipv4Addr
+}
+
+func (p Peer) Port() uint16 {
+	return p.port
+}
+
+func (p Peer) Address() string {
+	return p.ipv4Addr.String() + ":" + strconv.Itoa(int(p.port))
+}
+
+// PeerHandshake represents the initial messages given in the peer protocol
+type PeerHandshake struct {
+	StrLen       uint8
+	ProtocolName string
+	Reserved     [8]byte
+	InfoHash     [20]byte
+	PeerID       [20]byte
+}
+
+func NewBitTorrentProtocolHandshake(infoHash, peerID [20]byte) *PeerHandshake {
+	return &PeerHandshake{
+		StrLen:       18,
+		ProtocolName: "BitTorrent protocol",
+		Reserved:     [8]byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
+		PeerID:       peerID,
+	}
+}
+
+// SerializePeerHandshake builds the message defined in the bittorrent spec for initialising a peer connection
+// message structure -> <strlen uint8><pstr 19byte><reserved 8 bytes><info_hash 20 bytes><peer_id 20 bytes>
+func (p PeerHandshake) SerializePeerHandshake() []byte {
+	PEER_HANDSHAKE_MSG_LENGTH := 68
+	buf := make([]byte, PEER_HANDSHAKE_MSG_LENGTH)
+
+	buf[0] = p.StrLen // 19 in hex
+	copy(buf[1:], []byte(p.ProtocolName))
+	copy(buf[20:], p.Reserved[:])
+	copy(buf[28:], p.InfoHash[:])
+	copy(buf[48:], p.PeerID[:])
+
+	return buf
+}
+
+// DeserializePeerHandshake takes the raw message from a client and parses it into a PeerHandshake struct
+// if the struct does not follow the bittorrent protocol for this message an error is returned
+func DeserializePeerHandshake(raw [68]byte) (*PeerHandshake, error) {
+	// make message
+
+	var infoHash [20]byte
+	var peerID [20]byte
+	var Reserved [8]byte
+
+	copy(Reserved[:], raw[20:28])
+	copy(infoHash[:], raw[28:48])
+	copy(peerID[:], raw[48:])
+
+	msg := PeerHandshake{
+		StrLen:       uint8(raw[0]),
+		ProtocolName: string(raw[1:20]),
+		Reserved:     Reserved,
+		InfoHash:     infoHash,
+		PeerID:       peerID,
+	}
+
+	// validate fields
+
+	if msg.StrLen != 19 {
+		return nil, fmt.Errorf("field StrLen is not 19 instead %d", msg.StrLen)
+	}
+
+	if msg.ProtocolName != "BitTorrent protocol" {
+		return nil, fmt.Errorf("protocol name is not 'BitTorrent protocol' instead is %s", msg.ProtocolName)
+	}
+
+	return &msg, nil
 }

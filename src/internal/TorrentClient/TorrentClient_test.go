@@ -23,9 +23,9 @@ func TestHandleHTTPScheme(t *testing.T) {
 	testcase := []TestCase{
 		{
 			testname: "sanity check",
-			input:    "https://tracker.moeblog.cn:443/announce",
+			input:    "https://torrent.ubuntu.com/announce",
 			expected: &tracker.TrackerResponse{
-				FailureReason: "",
+				FailureReason: "Requested download is not authorized for use with this tracker.",
 			},
 			throwsError: false,
 		},
@@ -38,7 +38,7 @@ func TestHandleHTTPScheme(t *testing.T) {
 	}
 	TF := &torrent.TorrentFile{
 		Name:         "ubuntu-24.04.iso",
-		Announce:     []string{"udp://tracker.dmcomic.org:2710/announce", "udp://tracker.openbittorrent.com:80/announce"},
+		Announce:     []string{"https://torrent.ubuntu.com/announce"},
 		InfoHash:     [20]byte{'T', 'E', 'S', 'T', 'I', 'N', 'G', 'H', 'A', 'S', 'H'},
 		CreationDate: 1700000000,
 		PieceLength:  256 * 1024,
@@ -66,8 +66,15 @@ func TestHandleHTTPScheme(t *testing.T) {
 				t.Errorf("An error was expected however none were thrown")
 				return
 			}
+
+			// err thrown none expected
 			if !tc.throwsError && err != nil {
 				t.Errorf("An error was thrown none expected, %v", err)
+				return
+			}
+
+			// valid err
+			if err != nil {
 				return
 			}
 

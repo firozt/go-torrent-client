@@ -16,7 +16,6 @@ import (
 	peers "github.com/firozt/go-torrent/src/internal/Peers"
 	torrent "github.com/firozt/go-torrent/src/internal/Torrent"
 	tracker "github.com/firozt/go-torrent/src/internal/Tracker"
-	// torrent "github.com/firozt/go-torrent/src/internal/Torrent"
 )
 
 // ========== Struct Defs =========== //
@@ -90,8 +89,6 @@ func (t *TorrentClient) getTrackerResponse(trackerURL string, torrentFile *torre
 		return nil, err
 	}
 
-	fmt.Println(u.Scheme)
-
 	if u.Scheme == "udp" {
 		return t.udpHandshakeProtocol(u, torrentFile)
 	}
@@ -130,8 +127,6 @@ func (t TorrentClient) httpHandshakeProtocol(httpURL *url.URL, torrentFile *torr
 	defer resp.Body.Close()
 	reader := bufio.NewReader(resp.Body)
 	trackerResponse := &tracker.TrackerResponse{}
-	// val, _ := io.ReadAll(resp.Body)
-	// fmt.Println(string(val))
 	err = bencodeparser.Read(reader, trackerResponse)
 	if err != nil {
 		return nil, err
@@ -329,6 +324,51 @@ func (t TorrentClient) sendConnectUDPReq(udpURL *url.URL) (uint64, error) {
 
 	return connectionID, nil
 
+}
+
+// PeerHandshakeProtocol attempts to start a connection to a peer using the peer communications protocol
+// this is always done via tcp or utp
+func (c TorrentClient) PeerHandshakeProtocol(peer peers.Peer, infoHash [20]byte) (*net.TCPConn, error) {
+	if len(peer.IP()) == 0 || peer.Port() == 0 {
+		return nil, fmt.Errorf("peer is malformed - %s", peer.Address())
+	}
+
+	// build initHandshakeMsg
+	initHandshakeMsg := peers.NewBitTorrentProtocolHandshake(infoHash, c.peerID)
+
+	// attempt to connect, 5 second timeout
+	conn, err := net.DialTimeout("tcp", peer.Address(), 5*time.Second)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+
+	// send init msg
+	conn.Write(initHandshakeMsg.SerializePeerHandshake())
+
+	// wait for a response 5 second timeout
+
+	readBuf := make([]byte, 1024)
+	conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	n, err := conn.Read(readBuf)
+	if err != nil {
+		return nil, err
+	}
+
+	if n != 68 {
+		return nil, fmt.Errorf("number of bytes returned is not 68, the length of the expected response instead its %d", n)
+	}
+
+	peerHandshakeResponse, err := peers.DeserializePeerHandshake([68]byte(readBuf))
+	if err != nil {
+		return nil, err
+	}
+
+	if peerHandshakeResponse.InfoHash != infoHash {
+		return nil, fmt.Errorf("the infohash returned in the handshake are not equivilant, expected %x, got %x", peerHandshakeResponse.InfoHash, infoHash)
+	}
+
+	return nil, nil
 }
 
 // genertic func that sends a message to a url over udp and waits 5s for a response and returns it

@@ -121,6 +121,7 @@ func Read(reader io.Reader, v any) error {
 }
 
 func (b *BencodeParser) irToBencode(ir map[string]any, data any) error {
+	// ir["peers"] = ""
 	prettyPrintMap(ir)
 	// Convert IR → struct via JSON (bridge, not ideal but workable)
 	marshalled, err := json.Marshal(ir)
@@ -129,7 +130,8 @@ func (b *BencodeParser) irToBencode(ir map[string]any, data any) error {
 	}
 	if unmarshalErr := json.Unmarshal(marshalled, data); unmarshalErr != nil {
 		fmt.Printf("here ->%x", b.buf[b.cur_idx])
-		return fmt.Errorf("failed to unmarshal IR into torrent struct: %w\nData : \n%s", unmarshalErr, string(b.buf))
+		return fmt.Errorf("failed to unmarshal IR into torrent struct: %w", unmarshalErr)
+		// return fmt.Errorf("failed to unmarshal IR into torrent struct: %w\nData : \n%s", unmarshalErr, string(b.buf))
 	}
 
 	if err = setInfoHash(data, b.infoBytes); err != nil {
