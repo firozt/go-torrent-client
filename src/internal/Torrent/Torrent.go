@@ -9,6 +9,9 @@ import (
 
 // ============ Struct Defs  ============ //
 
+// line1
+// line2
+
 // TorrentFile flattened torrentfile struct with better typing, enforcing field values types
 type TorrentFile struct {
 	Name         string

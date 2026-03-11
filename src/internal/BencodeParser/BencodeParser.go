@@ -121,7 +121,7 @@ func Read(reader io.Reader, v any) error {
 }
 
 func (b *BencodeParser) irToBencode(ir map[string]any, data any) error {
-	// ir["peers"] = ""
+	ir["peers"] = ""
 	prettyPrintMap(ir)
 	// Convert IR → struct via JSON (bridge, not ideal but workable)
 	marshalled, err := json.Marshal(ir)
