@@ -135,6 +135,47 @@ func (r UDPAnnounceRequest) Serialize() []byte {
 	return nil
 }
 
+/*
+UDPConnectResponse respresents the response given from a connect request
+over UDP to a tracking server documented within https://www.bittorrent.org/beps/bep_0015.html
+Offset  Size            Name            Value
+0       32-bit integer  action          0 connect
+4       32-bit integer  transaction_id
+8       64-bit integer  connection_id
+16
+*/
+type UDPConnectResponse struct {
+	Action        uint32
+	TransactionID uint32
+	ConnectionID  uint64
+}
+
+func (r UDPConnectResponse) Serialize() { // TODO: implement
+
+}
+
+// DeserializeUDPConnectResponse takes an input of raw bytes, that represents a response
+// to a UDP connect request to the tracker, the shape of this is documented
+// within https://www.bittorrent.org/beps/bep_0015.html
+// An error will return if the input is malformed
+// Note this does not validate the data given, checks of TransactionID need to be handled externally
+func DeserializeUDPConnectResponse(rawInput []byte) (*UDPConnectResponse, error) {
+
+	if len(rawInput) < 16 {
+		return nil, fmt.Errorf("not enough bytes returned from connect to be a valid response")
+	}
+
+	responseAction := binary.BigEndian.Uint32(rawInput[:4])
+	responseTransactionID := binary.BigEndian.Uint32(rawInput[4:8])
+	connectionID := binary.BigEndian.Uint64(rawInput[8:])
+
+	return &UDPConnectResponse{
+		Action:        responseAction,
+		TransactionID: responseTransactionID,
+		ConnectionID:  connectionID,
+	}, nil
+}
+
 // Helpers
 
 func randomUint32() uint32 {

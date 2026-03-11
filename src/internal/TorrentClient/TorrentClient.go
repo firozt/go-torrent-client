@@ -289,32 +289,16 @@ func (t TorrentClient) sendConnectUDPReq(udpURL *url.URL) (uint64, error) {
 		return 0, err
 	}
 
-	// response will be in the shape
-	// Offset  Size            Name            Value
-	// 0       32-bit integer  action          0 connect
-	// 4       32-bit integer  transaction_id
-	// 8       64-bit integer  connection_id
-	// 16
-
-	// parse response
-
-	if len(response) < 16 {
-		return 0, fmt.Errorf("not enough bytes returned from connect to be a valid response")
+	// parses resp
+	responseStruct, err := tracker.DeserializeUDPConnectResponse(response)
+	if err != nil {
+		return 0, err
 	}
 
-	responseAction := binary.BigEndian.Uint32(response[:4])
-	responseTransactionID := binary.BigEndian.Uint32(response[4:8])
-	connectionID := binary.BigEndian.Uint64(response[8:])
-
-	if responseAction != 0 {
-		return 0, fmt.Errorf("action does not have value 0, instead has %d", responseAction)
+	if transactionID != responseStruct.TransactionID {
+		return 0, fmt.Errorf("transactionID does not match with generated number in request, expected %d, got %d", responseStruct.TransactionID, transactionID)
 	}
-
-	if transactionID != responseTransactionID {
-		return 0, fmt.Errorf("transactionID does not match with generated number in request, expected %d, got %d", responseTransactionID, transactionID)
-	}
-
-	return connectionID, nil
+	return responseStruct.ConnectionID, nil
 
 }
 
