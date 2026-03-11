@@ -106,11 +106,7 @@ func (t TorrentClient) httpHandshakeProtocol(httpURL *url.URL, torrentFile *torr
 	}
 
 	// add params to url
-
 	fullTrackerURL, _ := torrentFile.BuildTrackerURL(httpURL.String(), string(t.peerID[:]), 12345)
-
-	// fmt.Println(fullTrackerURL)
-	// fmt.Println("https://tracker.moeblog.cn:443/announce?peer_id=%D3%1A%36%E9%AE%23%F7%33%67%EA%C6%7C%8E%70%F9%FC%D4%65%6A%B5&port=12345&uploaded=0&downloaded=0&left=1073741824&compact=1")
 
 	// we need to make a request, and cancel out if it hangs as server may be down
 	client := &http.Client{
@@ -281,17 +277,13 @@ on each subsequent request to the tracker server from this ip:port combo until e
 func (t TorrentClient) sendConnectUDPReq(udpURL *url.URL) (uint64, error) {
 	// check url protocol
 	if udpURL.Scheme != "udp" {
-		return 0, fmt.Errorf("url scheme is not udp instead is %s ", string(udpURL.Host))
+		return 0, fmt.Errorf("url scheme is not udp instead is %s ", udpURL.Host)
 	}
 
 	// build connect connectMsg
-	requestTransactionID := randomUint32()
-	connectMsg := make([]byte, 16)
-	binary.BigEndian.PutUint64(connectMsg, 0x41727101980)
-	binary.BigEndian.PutUint32(connectMsg[8:], 0)
-	binary.BigEndian.PutUint32(connectMsg[12:], requestTransactionID)
+	connectMsg, transactionID := tracker.NewUDPConnectRequest()
 
-	response, err := sendAndRecvUDP(udpURL, connectMsg)
+	response, err := sendAndRecvUDP(udpURL, connectMsg.Serialize())
 
 	if err != nil {
 		return 0, err
@@ -311,15 +303,15 @@ func (t TorrentClient) sendConnectUDPReq(udpURL *url.URL) (uint64, error) {
 	}
 
 	responseAction := binary.BigEndian.Uint32(response[:4])
-	transactionID := binary.BigEndian.Uint32(response[4:8])
+	responseTransactionID := binary.BigEndian.Uint32(response[4:8])
 	connectionID := binary.BigEndian.Uint64(response[8:])
 
 	if responseAction != 0 {
 		return 0, fmt.Errorf("action does not have value 0, instead has %d", responseAction)
 	}
 
-	if transactionID != requestTransactionID {
-		return 0, fmt.Errorf("transactionID does not match with genrated number in request, expected %d, got %d", transactionID, requestTransactionID)
+	if transactionID != responseTransactionID {
+		return 0, fmt.Errorf("transactionID does not match with generated number in request, expected %d, got %d", responseTransactionID, transactionID)
 	}
 
 	return connectionID, nil
@@ -365,7 +357,7 @@ func (c TorrentClient) PeerHandshakeProtocol(peer peers.Peer, infoHash [20]byte)
 	}
 
 	if peerHandshakeResponse.InfoHash != infoHash {
-		return nil, fmt.Errorf("the infohash returned in the handshake are not equivilant, expected %x, got %x", peerHandshakeResponse.InfoHash, infoHash)
+		return nil, fmt.Errorf("the infohash returned in the handshake are not equivilant, expected %x, got %x", infoHash, peerHandshakeResponse.InfoHash)
 	}
 
 	return nil, nil

@@ -214,6 +214,7 @@ func TestDeserialize(t *testing.T) {
 			input: [68]byte{
 				19,
 				'B', 'i', 't', 'T', 'o', 'r', 'r', 'e', 'n', 't', ' ',
+				'p', 'r', 'o', 't', 'o', 'c', 'o', 'l',
 			},
 			expected: &PeerHandshake{
 				StrLen:       19,

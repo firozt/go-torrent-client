@@ -125,7 +125,7 @@ func TestSendConnectUDPReq(t *testing.T) {
 	testcase := []TestCase{
 		{
 			testname:    "sanity check",
-			input:       "udp://tracker.opentrackr.org:1337/announce",
+			input:       "udp://wepzone.net:6969/announce ",
 			throwsError: false,
 		},
 	}
