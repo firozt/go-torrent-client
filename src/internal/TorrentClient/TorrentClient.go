@@ -49,15 +49,6 @@ func NewTorrentClient(port uint16) *TorrentClient {
 	}
 }
 
-func random20Bytes() [20]byte {
-	var b [20]byte
-	_, err := rand.Read(b[:])
-	if err != nil {
-		panic("random 20 bytes panic")
-	}
-	return b
-}
-
 func (t *TorrentClient) GetPeerStringID() string {
 	return string(t.peerID[:])
 }
@@ -222,43 +213,24 @@ func (t TorrentClient) sendAnnounceReq(udpURL *url.URL, connectionID uint64, tor
 		return nil, err
 	}
 
-	// response:
-	// Offset      Size            Name            Value
-	// 0           32-bit integer  action          1 // announce
-	// 4           32-bit integer  transaction_id
-	// 8           32-bit integer  interval
-	// 12          32-bit integer  leechers
-	// 16          32-bit integer  seeders
-	// 20 + 6 * n  32-bit integer  IP address
-
-	// now we validate the response is valid
-
-	if len(resp) < 20 {
-		// cannot be a valid response
-		return nil, fmt.Errorf("response malformed : number of bytes is less than 20")
+	udpAnnounceResponse, err := tracker.DeserializeUDPAnnounceResponse(resp)
+	if err != nil {
+		return nil, err
 	}
 
-	// obtain each value returned into a easy to handle variable
-	action := binary.BigEndian.Uint32(resp[:4])
-	respTransactionID := binary.BigEndian.Uint32(resp[4:8])
-
-	if action != 1 {
+	if udpAnnounceResponse.Action != 1 {
 		return nil, fmt.Errorf("response unexpected value - the value of announce in the response was not 1 (announce request response)")
 	}
 
-	if respTransactionID != transactionID {
+	if udpAnnounceResponse.TransactionID != transactionID {
 		return nil, fmt.Errorf("transaction ID's do not match")
 	}
 
 	// valid response now
 
-	peerBlob := resp[20:]
-	if len(peerBlob)%6 != 0 {
-		return nil, fmt.Errorf("length of peer blob is not a valid size 6N")
-	}
-
 	return &tracker.TrackerResponse{
-		RawPeers: peerBlob,
+		RawPeers: udpAnnounceResponse.Peers,
+		Interval: int64(udpAnnounceResponse.Interval),
 	}, nil
 }
 
@@ -347,7 +319,9 @@ func (c TorrentClient) PeerHandshakeProtocol(peer peers.Peer, infoHash [20]byte)
 	return nil, nil
 }
 
-// genertic func that sends a message to a url over udp and waits 5s for a response and returns it
+// sendAndRecvUDP is a generic function that sends a message to
+// a url over udp and waits 5s for a response and returns it
+// uses OS given free port and uses hosts network IPv4
 func sendAndRecvUDP(udpURL *url.URL, msg []byte) ([]byte, error) {
 	// get address
 	raddr, err := net.ResolveUDPAddr("udp", udpURL.Host)
@@ -384,8 +358,19 @@ func sendAndRecvUDP(udpURL *url.URL, msg []byte) ([]byte, error) {
 	return buf[:n], nil
 }
 
+// helpers
+
 func randomUint32() uint32 {
 	var b [4]byte
 	rand.Read(b[:])
 	return binary.BigEndian.Uint32(b[:])
+}
+
+func random20Bytes() [20]byte {
+	var b [20]byte
+	_, err := rand.Read(b[:])
+	if err != nil {
+		panic("random 20 bytes panic")
+	}
+	return b
 }

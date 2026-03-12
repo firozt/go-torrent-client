@@ -9,7 +9,7 @@ import (
 	peers "github.com/firozt/go-torrent/src/internal/Peers"
 )
 
-// this struct depicts the tracker response given connect + announce (or just announce via http) has been accomplished
+// TrackerResponse depicts the tracker response given connect + announce (or just announce via http) has been accomplished
 // successfully
 type TrackerResponse struct {
 	FailureReason string        `json:"failure reason"`
@@ -79,26 +79,11 @@ func (r UDPConnectRequest) Serialize() []byte {
 	return msg
 }
 
-// func DeserializeTrackerConnect(raw []byte) (*UDPConnectRequest, error) {
-// 	if len(raw) != 16 {
-// 		return nil, fmt.Errorf("input is not of a valid size (16 bytes) instead is %d", len(raw))
-// 	}
-//
-// 	// build connect connectMsg
-// 	requestTransactionID := randomUint32()
-// 	connectMsg := make([]byte, 16)
-// 	binary.BigEndian.PutUint64(connectMsg, 0x41727101980)
-// 	binary.BigEndian.PutUint32(connectMsg[8:], 0)
-// 	binary.BigEndian.PutUint32(connectMsg[12:], requestTransactionID)
-//
-//
-//
-// 	return connectMsg, nil
-// }
-
 /*
 UDPAnnounceRequest represents
-announce message packet stru
+announce message packet structure, this is defined in the BEPS bit torrent protocol
+which can be found https://www.bittorrent.org/beps/bep_0015.html
+This is returned on a successfull UDPAnnounceRequest
 Offset  Size    Name    Value
 0       64-bit integer  connection_id
 8       32-bit integer  action          1 // announce
@@ -129,6 +114,97 @@ type UDPAnnounceRequest struct {
 	NumWant       int32
 	Port          uint16
 }
+
+// func MakeUDPAnnounceRequest(connectionID uint64, infoHash [20]byte, torrentClient *torrentclient.TorrentClient) {
+//
+// 	transactionID := randomUint32()
+//
+// 	// Build announce packet
+// 	buf := new(bytes.Buffer)
+//
+// 	// connection_id
+// 	binary.Write(buf, binary.BigEndian, connectionID)
+//
+// 	// action = announce (1)
+// 	binary.Write(buf, binary.BigEndian, uint32(1))
+//
+// 	// transaction_id
+// 	binary.Write(buf, binary.BigEndian, transactionID)
+//
+// 	// info_hash
+// 	buf.Write(infoHash[:])
+//
+// 	// peer_id
+// 	buf.Write(*torrentClient.copyright)
+//
+// 	// downloaded
+// 	binary.Write(buf, binary.BigEndian, t.downloaded)
+//
+// 	// left
+// 	binary.Write(buf, binary.BigEndian, t.left)
+//
+// 	// uploaded
+// 	binary.Write(buf, binary.BigEndian, t.uploaded)
+//
+// 	// event = started (2)
+// 	binary.Write(buf, binary.BigEndian, uint32(2))
+//
+// 	// IP address = 0 (default)
+// 	binary.Write(buf, binary.BigEndian, uint32(0))
+//
+// 	// key (random)
+// 	binary.Write(buf, binary.BigEndian, randomUint32())
+//
+// 	// num_want = -1
+// 	binary.Write(buf, binary.BigEndian, int32(-1))
+//
+// 	// port
+// 	binary.Write(buf, binary.BigEndian, uint16(t.port))
+//
+// 	resp, err := sendAndRecvUDP(udpURL, buf.Bytes())
+// 	if err != nil {
+// 		return nil, err
+// 	}
+//
+// 	// response:
+// 	// Offset      Size            Name            Value
+// 	// 0           32-bit integer  action          1 // announce
+// 	// 4           32-bit integer  transaction_id
+// 	// 8           32-bit integer  interval
+// 	// 12          32-bit integer  leechers
+// 	// 16          32-bit integer  seeders
+// 	// 20 + 6 * n  32-bit integer  IP address
+//
+// 	// now we validate the response is valid
+//
+// 	if len(resp) < 20 {
+// 		// cannot be a valid response
+// 		return nil, fmt.Errorf("response malformed : number of bytes is less than 20")
+// 	}
+//
+// 	// obtain each value returned into a easy to handle variable
+// 	action := binary.BigEndian.Uint32(resp[:4])
+// 	respTransactionID := binary.BigEndian.Uint32(resp[4:8])
+//
+// 	if action != 1 {
+// 		return nil, fmt.Errorf("response unexpected value - the value of announce in the response was not 1 (announce request response)")
+// 	}
+//
+// 	if respTransactionID != transactionID {
+// 		return nil, fmt.Errorf("transaction ID's do not match")
+// 	}
+//
+// 	// valid response now
+//
+// 	peerBlob := resp[20:]
+// 	if len(peerBlob)%6 != 0 {
+// 		return nil, fmt.Errorf("length of peer blob is not a valid size 6N")
+// 	}
+//
+// 	return &tracker.TrackerResponse{
+// 		RawPeers: peerBlob,
+// 	}, nil
+// }
 
 func (r UDPAnnounceRequest) Serialize() []byte {
 	// TODO: implement
@@ -174,6 +250,47 @@ func DeserializeUDPConnectResponse(rawInput []byte) (*UDPConnectResponse, error)
 		TransactionID: responseTransactionID,
 		ConnectionID:  connectionID,
 	}, nil
+}
+
+/*
+UDPAnnounceResponse represents the announce response from the tracker
+given a valid UDP announce request, depicted in the BEPS bit torrent standard,
+https://www.bittorrent.org/beps/bep_0015.html, data is in the form of
+Offset      Size            Name
+0           32-bit integer  action
+4           32-bit integer  transaction_id
+8           32-bit integer  interval
+12          32-bit integer  leechers
+16          32-bit integer  seeders
+20 + 6 * n  peer datablob   IP address <ipv4><port> * n
+*/
+type UDPAnnounceResponse struct {
+	Action        uint32
+	TransactionID uint32
+	Interval      uint32
+	Leechers      uint32
+	Seeders       uint32
+	Peers         []byte
+}
+
+func DeserializeUDPAnnounceResponse(rawInput []byte) (*UDPAnnounceResponse, error) {
+	if len(rawInput) < 20 {
+		return nil, fmt.Errorf("not enough bytes to make a valid response, need atleast 20 got %d", len(rawInput))
+	}
+
+	if (len(rawInput)-20)%6 != 0 {
+		return nil, fmt.Errorf("malformed response, peers is not a multiple of 6, total length of response is %d", len(rawInput))
+	}
+
+	return &UDPAnnounceResponse{
+		Action:        binary.BigEndian.Uint32(rawInput[:4]),
+		TransactionID: binary.BigEndian.Uint32(rawInput[4:8]),
+		Interval:      binary.BigEndian.Uint32(rawInput[8:12]),
+		Leechers:      binary.BigEndian.Uint32(rawInput[12:16]),
+		Seeders:       binary.BigEndian.Uint32(rawInput[16:20]),
+		Peers:         rawInput[20:],
+	}, nil
+
 }
 
 // Helpers
