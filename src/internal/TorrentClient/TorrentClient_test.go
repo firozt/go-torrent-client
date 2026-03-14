@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	peers "github.com/firozt/go-torrent/src/internal/Peers"
 	torrent "github.com/firozt/go-torrent/src/internal/Torrent"
 	tracker "github.com/firozt/go-torrent/src/internal/Tracker"
 )
@@ -197,6 +198,50 @@ func TestUDPHandshake(t *testing.T) {
 			}
 			if reflect.DeepEqual(got, &tc.expected) {
 				t.Errorf("got and expected are not equal\nGOT:\n%v,WANTED:\n%v", got, tc.expected)
+			}
+
+		})
+	}
+}
+
+func TestPeerHandshake(t *testing.T) {
+	type TestInput struct {
+		peer     peers.Peer
+		infoHash [20]byte
+	}
+
+	type TestCase struct {
+		testname  string
+		input     TestInput
+		throwsErr bool
+	}
+
+	// TODO: find a way to test this effectively
+	testcases := []TestCase{
+		// {
+		// testname: "sanity check",
+		// input: TestInput{
+		// 	peer:     peers.Peer{},
+		// 	infoHash: [20]byte{},
+		// },
+		// },
+	}
+
+	tclient := NewTorrentClient(12345)
+	for _, tc := range testcases {
+		t.Run(tc.testname, func(t *testing.T) {
+			got, err := tclient.PeerHandshakeProtocol(tc.input.peer, tc.input.infoHash)
+
+			if tc.throwsErr && err == nil {
+				t.Errorf("Expected an error however recieved none")
+			}
+
+			if !tc.throwsErr && err != nil {
+				t.Errorf("An error was thrown none expected, %v", err)
+			}
+
+			if got == nil {
+				t.Errorf("got was nill, expected a non nil tcp connection object")
 			}
 
 		})

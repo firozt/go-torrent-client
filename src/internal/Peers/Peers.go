@@ -6,17 +6,17 @@ import (
 	"fmt"
 	"net"
 	"strconv"
+	"sync"
 )
 
+// Peer represents a Peer recieved from a tracking serverm
+// Note that PeerID may be empty given that they have not yet
+// displayed this information, typically when tracking server returns a response
+// more information can be found on https://www.bittorrent.org/beps/bep_0003.html
 type Peer struct {
 	ipv4Addr net.IP
 	port     uint16
 	PeerID   [20]byte
-	// amChoking      bool
-	// amInterested   bool
-	// peerChoking    bool
-	// peerInterested bool
-	// lastSeen       int64
 }
 
 // ErrInvalidPeerBlob occurs when raw peer blob data is malformed
@@ -71,13 +71,23 @@ func (p Peer) Address() string {
 	return p.ipv4Addr.String() + ":" + strconv.Itoa(int(p.port))
 }
 
-// PeerHandshake represents the initial messages given in the peer protocol
+// PeerHandshake represents the handshake message exchanged between peers
+// when a connection is first established. It must be the first message
+// sent by both sides of the connection. The handshake is 68 bytes total.
+// See: https://www.bittorrent.org/beps/bep_0003.html
 type PeerHandshake struct {
-	StrLen       uint8
+	// The size of the string that depicts the protocol name
+	// For BitTorrent this is alway 19
+	StrLen uint8
+	// The protocol identifier string
+	// For the BitTorrent Protocol this is always 'BitTorrent Protocol'
 	ProtocolName string
-	Reserved     [8]byte
-	InfoHash     [20]byte
-	PeerID       [20]byte
+	// Reserved bytes, should be all 0x00's
+	Reserved [8]byte
+	// InfoHash of the torrentfile that both wanting to upload/download
+	InfoHash [20]byte
+	// Client Peer identifier
+	PeerID [20]byte
 }
 
 func NewBitTorrentProtocolHandshake(infoHash, peerID [20]byte) *PeerHandshake {
@@ -113,9 +123,9 @@ func DeserializePeerHandshake(raw [68]byte) (*PeerHandshake, error) {
 	var peerID [20]byte
 	var Reserved [8]byte
 
-	copy(Reserved[:], raw[20:28])
-	copy(infoHash[:], raw[28:48])
-	copy(peerID[:], raw[48:])
+	copy(Reserved[:], raw[20:28]) // reserved bytes
+	copy(infoHash[:], raw[28:48]) // info hash
+	copy(peerID[:], raw[48:])     // peerid
 
 	msg := PeerHandshake{
 		StrLen:       uint8(raw[0]),
@@ -126,7 +136,6 @@ func DeserializePeerHandshake(raw [68]byte) (*PeerHandshake, error) {
 	}
 
 	// validate fields
-
 	if msg.StrLen != 19 {
 		return nil, fmt.Errorf("field StrLen is not 19 instead %d", msg.StrLen)
 	}
@@ -136,4 +145,44 @@ func DeserializePeerHandshake(raw [68]byte) (*PeerHandshake, error) {
 	}
 
 	return &msg, nil
+}
+
+// Message represents a message that is sent/recieved during p2p communications
+type Message struct {
+	ID      uint8
+	Payload []byte
+}
+
+// PeerConn represents and manages the actual connection from a peer to another peer
+type PeerConn struct {
+	peer        Peer
+	conn        net.Conn
+	sendChannel chan Message
+}
+
+func MakePeerConn(peer Peer, conn net.Conn) *PeerConn {
+	return &PeerConn{
+		peer:        peer,
+		conn:        conn,
+		sendChannel: make(chan Message),
+	}
+}
+
+func (pc PeerConn) StartLoop() {
+	defer pc.conn.Close() // close conn after loop ends
+
+	wg := sync.WaitGroup{}
+
+	wg.Go(pc.readLoop)
+	wg.Go(pc.writeLoop)
+
+	wg.Wait()
+}
+
+func (pc PeerConn) readLoop() {
+
+}
+
+func (pc PeerConn) writeLoop() {
+
 }

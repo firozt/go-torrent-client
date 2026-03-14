@@ -289,12 +289,11 @@ func (c TorrentClient) PeerHandshakeProtocol(peer peers.Peer, infoHash [20]byte)
 	if err != nil {
 		return nil, err
 	}
-	defer conn.Close()
 
 	// send init msg
 	conn.Write(initHandshakeMsg.SerializePeerHandshake())
 
-	// wait for a response 5 second timeout
+	// wait for a response for 5 seconds then timeout
 
 	readBuf := make([]byte, 1024)
 	conn.SetReadDeadline(time.Now().Add(5 * time.Second))
@@ -304,19 +303,22 @@ func (c TorrentClient) PeerHandshakeProtocol(peer peers.Peer, infoHash [20]byte)
 	}
 
 	if n != 68 {
+		conn.Close()
 		return nil, fmt.Errorf("number of bytes returned is not 68, the length of the expected response instead its %d", n)
 	}
 
 	peerHandshakeResponse, err := peers.DeserializePeerHandshake([68]byte(readBuf))
 	if err != nil {
+		conn.Close()
 		return nil, err
 	}
 
 	if peerHandshakeResponse.InfoHash != infoHash {
+		conn.Close()
 		return nil, fmt.Errorf("the infohash returned in the handshake are not equivilant, expected %x, got %x", infoHash, peerHandshakeResponse.InfoHash)
 	}
 
-	return nil, nil
+	return &conn, nil
 }
 
 // sendAndRecvUDP is a generic function that sends a message to
