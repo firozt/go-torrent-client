@@ -25,7 +25,7 @@ type TrackerResponse struct {
 // May return a raw peers does not exist error
 func (t *TrackerResponse) GetPeers() (*[]peers.Peer, error) {
 
-	if len(*t.peers) > 0 {
+	if t.peers != nil && len(*t.peers) > 0 {
 		return t.peers, nil
 	}
 
@@ -274,23 +274,37 @@ type UDPAnnounceResponse struct {
 }
 
 func DeserializeUDPAnnounceResponse(rawInput []byte) (*UDPAnnounceResponse, error) {
+	if len(rawInput) < 8 {
+		return nil, fmt.Errorf("not enough bytes for response")
+	}
+
+	// verify action values
+	action := binary.BigEndian.Uint32(rawInput[:4])
+
+	if action == 3 {
+		return nil, fmt.Errorf("tracker error: %s", string(rawInput[8:]))
+	}
+
+	if action != 1 {
+		return nil, fmt.Errorf("unexpected action %d", action)
+	}
+
 	if len(rawInput) < 20 {
-		return nil, fmt.Errorf("not enough bytes to make a valid response, need atleast 20 got %d", len(rawInput))
+		return nil, fmt.Errorf("not enough bytes, got %d", len(rawInput))
 	}
 
 	if (len(rawInput)-20)%6 != 0 {
-		return nil, fmt.Errorf("malformed response, peers is not a multiple of 6, total length of response is %d", len(rawInput))
+		return nil, fmt.Errorf("malformed peers section")
 	}
 
 	return &UDPAnnounceResponse{
-		Action:        binary.BigEndian.Uint32(rawInput[:4]),
+		Action:        action,
 		TransactionID: binary.BigEndian.Uint32(rawInput[4:8]),
 		Interval:      binary.BigEndian.Uint32(rawInput[8:12]),
 		Leechers:      binary.BigEndian.Uint32(rawInput[12:16]),
 		Seeders:       binary.BigEndian.Uint32(rawInput[16:20]),
 		Peers:         rawInput[20:],
 	}, nil
-
 }
 
 // Helpers

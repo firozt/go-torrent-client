@@ -133,10 +133,21 @@ func (t TorrentClient) udpHandshakeProtocol(udpURL *url.URL, torrentfile *torren
 		return nil, err
 	}
 
-	fmt.Printf("passed connect request with connID of %d, attempting announce request\n", connectionID)
+	fmt.Printf("[LOG]: passed connect request with connID of %d, attempting announce request\n", connectionID)
 
 	// send announce request with returned connectionID for verification
-	return t.sendAnnounceReq(udpURL, connectionID, torrentfile)
+	res, announceErr := t.sendAnnounceReq(udpURL, connectionID, torrentfile)
+
+	if announceErr == nil {
+		// make peers
+		peers, err := res.GetPeers()
+		if err != nil {
+			fmt.Errorf("announce succeeeded however deserialzing peers failed with error %+v\n", err)
+		}
+		fmt.Printf("[LOG]: passed announce request with %d peer(s) and interval %d seconds\n", len(*peers), res.Interval)
+	}
+
+	return res, announceErr
 }
 
 /*
@@ -229,8 +240,11 @@ func (t TorrentClient) sendAnnounceReq(udpURL *url.URL, connectionID uint64, tor
 	// valid response now
 
 	return &tracker.TrackerResponse{
-		RawPeers: udpAnnounceResponse.Peers,
-		Interval: int64(udpAnnounceResponse.Interval),
+		FailureReason: "",
+		RawPeers:      udpAnnounceResponse.Peers,
+		Interval:      int64(udpAnnounceResponse.Interval),
+		Complete:      int64(udpAnnounceResponse.Seeders),
+		Incomplete:    int64(udpAnnounceResponse.Leechers),
 	}, nil
 }
 
@@ -251,6 +265,7 @@ func (t TorrentClient) sendConnectUDPReq(udpURL *url.URL) (uint64, error) {
 	if udpURL.Scheme != "udp" {
 		return 0, fmt.Errorf("url scheme is not udp instead is %s ", udpURL.Host)
 	}
+	fmt.Println("[LOG]: sending udp request")
 
 	// build connect connectMsg
 	connectMsg, transactionID := tracker.NewUDPConnectRequest()
@@ -318,7 +333,13 @@ func (c TorrentClient) PeerHandshakeProtocol(peer peers.Peer, infoHash [20]byte)
 		return nil, fmt.Errorf("the infohash returned in the handshake are not equivilant, expected %x, got %x", infoHash, peerHandshakeResponse.InfoHash)
 	}
 
-	return &conn, nil
+	// convert from net.conn interface to tcpconn obj
+	tcpConn, ok := conn.(*net.TCPConn)
+	if !ok {
+		fmt.Errorf("expected *net.TCPConn, got type %T", conn)
+	}
+
+	return tcpConn, nil
 }
 
 // sendAndRecvUDP is a generic function that sends a message to
