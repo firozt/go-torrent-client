@@ -70,9 +70,26 @@ func (t *TorrentClient) StartTorrent(torrentfile torrent.TorrentFile) {
 		panic("No valid tracker annoucne responses")
 	}
 
+	// attempt to talk to peers
+
+	peerList, err := trackerResponse.GetPeers()
+
+	if err != nil {
+		panic(fmt.Sprintf("unable to deserialize peers:\n%+v\n", trackerResponse.RawPeers))
+	}
+
+	peerConns, err := peers.ContactPeers(*peerList, torrentfile.InfoHash, t.peerID)
+
+	fmt.Printf("[WARN]: Non fatal error, some peers timedout or refused connections:\n%s\n", err)
+
+	if len(peerConns) < 1 {
+		panic("unabe to contact any peer")
+	}
+	
 }
 
 // url can either point to a http server or a udp server
+// generic call
 func (t *TorrentClient) getTrackerResponse(trackerURL string, torrentFile *torrent.TorrentFile) (*tracker.TrackerResponse, error) {
 	u, err := url.Parse(trackerURL)
 
@@ -289,58 +306,6 @@ func (t TorrentClient) sendConnectUDPReq(udpURL *url.URL) (uint64, error) {
 
 }
 
-// PeerHandshakeProtocol attempts to start a connection to a peer using the peer communications protocol
-// this is always done via tcp or utp
-func (c TorrentClient) PeerHandshakeProtocol(peer peers.Peer, infoHash [20]byte) (*net.TCPConn, error) {
-	if len(peer.IP()) == 0 || peer.Port() == 0 {
-		return nil, fmt.Errorf("peer is malformed - %s", peer.Address())
-	}
-
-	// build initHandshakeMsg
-	initHandshakeMsg := peers.NewBitTorrentProtocolHandshake(infoHash, c.peerID)
-
-	// attempt to connect, 5 second timeout
-	conn, err := net.DialTimeout("tcp", peer.Address(), 5*time.Second)
-	if err != nil {
-		return nil, err
-	}
-
-	// send init msg
-	conn.Write(initHandshakeMsg.SerializePeerHandshake())
-
-	// wait for a response for 5 seconds then timeout
-
-	readBuf := make([]byte, 1024)
-	conn.SetReadDeadline(time.Now().Add(5 * time.Second))
-	n, err := conn.Read(readBuf)
-	if err != nil {
-		return nil, err
-	}
-
-	if n != 68 {
-		conn.Close()
-		return nil, fmt.Errorf("number of bytes returned is not 68, the length of the expected response instead its %d", n)
-	}
-
-	peerHandshakeResponse, err := peers.DeserializePeerHandshake([68]byte(readBuf))
-	if err != nil {
-		conn.Close()
-		return nil, err
-	}
-
-	if peerHandshakeResponse.InfoHash != infoHash {
-		conn.Close()
-		return nil, fmt.Errorf("the infohash returned in the handshake are not equivilant, expected %x, got %x", infoHash, peerHandshakeResponse.InfoHash)
-	}
-
-	// convert from net.conn interface to tcpconn obj
-	tcpConn, ok := conn.(*net.TCPConn)
-	if !ok {
-		fmt.Errorf("expected *net.TCPConn, got type %T", conn)
-	}
-
-	return tcpConn, nil
-}
 
 // sendAndRecvUDP is a generic function that sends a message to
 // a url over udp and waits 5s for a response and returns it

@@ -7,6 +7,7 @@ import (
 	"net"
 	"strconv"
 	"sync"
+	"time"
 )
 
 // Peer represents a Peer recieved from a tracking serverm
@@ -166,6 +167,84 @@ func MakePeerConn(peer Peer, conn net.Conn) *PeerConn {
 		conn:        conn,
 		sendChannel: make(chan Message),
 	}
+}
+
+// PeerHandshakeProtocol attempts to start a connection to a peer using the peer communications protocol
+// this is always done via tcp or utp
+func PeerHandshakeProtocol(peer Peer, infoHash [20]byte, peerId [20]byte) (*net.TCPConn, error) {
+	if len(peer.IP()) == 0 || peer.Port() == 0 {
+		return nil, fmt.Errorf("peer is malformed - %s", peer.Address())
+	}
+
+	// build initHandshakeMsg
+	initHandshakeMsg := NewBitTorrentProtocolHandshake(infoHash, peerId)
+
+	// attempt to connect, 5 second timeout
+	conn, err := net.DialTimeout("tcp", peer.Address(), 5*time.Second)
+	if err != nil {
+		return nil, err
+	}
+
+	// send init msg
+	conn.Write(initHandshakeMsg.SerializePeerHandshake())
+
+	// wait for a response for 5 seconds then timeout
+
+	readBuf := make([]byte, 1024)
+	conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	n, err := conn.Read(readBuf)
+	if err != nil {
+		return nil, err
+	}
+
+	if n != 68 {
+		conn.Close()
+		return nil, fmt.Errorf("number of bytes returned is not 68, the length of the expected response instead its %d", n)
+	}
+
+	peerHandshakeResponse, err := DeserializePeerHandshake([68]byte(readBuf))
+	if err != nil {
+		conn.Close()
+		return nil, err
+	}
+
+	if peerHandshakeResponse.InfoHash != infoHash {
+		conn.Close()
+		return nil, fmt.Errorf("the infohash returned in the handshake are not equivilant, expected %x, got %x", infoHash, peerHandshakeResponse.InfoHash)
+	}
+
+	// convert from net.conn interface to tcpconn obj
+	tcpConn, ok := conn.(*net.TCPConn)
+	if !ok {
+		return nil, fmt.Errorf("expected *net.TCPConn, got type %T", conn)
+	}
+
+	return tcpConn, nil
+}
+
+func ContactPeers(peers []Peer, infoHash [20]byte, peerId [20]byte) ([]PeerConn, error) {
+	var errs string 
+	var res []PeerConn
+	for _, peer := range peers {
+		// call peer
+		conn, err := PeerHandshakeProtocol(peer, infoHash, peerId)		
+		if err != nil {
+			fmt.Printf("[LOG] failed to contact peer %+v\n", peer)
+			errs += fmt.Sprintf("failed to connect to peer %s on port %d\n", peer.ipv4Addr.String(), peer.port) 
+			continue
+		}
+
+		// success
+		fmt.Printf("[LOG] successfully contacted peer %+v\n", peer)
+		peerconns := MakePeerConn(peer, conn)
+		res = append(res, *peerconns)
+	}
+
+	if len(errs) >= 0 {
+		return nil, fmt.Errorf("could not contact some peers: \n%s", errs)
+	}
+
+	return  nil, nil
 }
 
 func (pc PeerConn) StartLoop() {
