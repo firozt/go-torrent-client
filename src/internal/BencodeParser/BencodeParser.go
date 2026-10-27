@@ -2,21 +2,25 @@ package bencodeparser
 
 import (
 	"crypto/sha1"
-	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"reflect"
 	"strconv"
+	"strings"
 )
 
+// maximum nesting of lists/dicts, protects against stack exhaustion on hostile input
+const maxDepth = 512
+
 type BencodeParser struct {
-	numDictsInInfoParsed int8   // number of dict value's parsed within the info key, used to understand when we are not in info anymore
-	captureBytes         bool   // tells the parser when to capture bytes for info_hash calculation
-	infoBytes            []byte // holds all the bytes of the info dict
-	buf                  []byte
-	buf_len              uint64
-	cur_idx              uint64
-	reader               *io.Reader
+	depth        int    // current list/dict nesting depth (root dict == 1)
+	captureBytes bool   // tells the parser when to capture bytes for info_hash calculation
+	infoBytes    []byte // holds all the raw bytes of the top level "info" value
+	buf          []byte
+	buf_len      uint64
+	cur_idx      uint64
+	reader       *io.Reader
 }
 
 // == Error definitions == //
@@ -24,39 +28,45 @@ type BencodeParser struct {
 var NEGATIVE_ZERO_VALUE = fmt.Errorf("A negative zero was parsed, invalid token")
 var INVALID_NEGATIVE_VALUE = fmt.Errorf("A negative number was taken for a non-negative field")
 var PARSE_ERR = fmt.Errorf("Parsing error")
-var EOB = fmt.Errorf("end of b.ffer error")
+var EOB = fmt.Errorf("end of buffer error")
 var EOF = fmt.Errorf("End of file error")
 
 func makeBencodeParser(r *io.Reader) *BencodeParser {
 	return &BencodeParser{
-		numDictsInInfoParsed: -1,
-		infoBytes:            []byte{},
-		buf:                  make([]byte, 1024),
-		reader:               r,
+		infoBytes: []byte{},
+		buf:       make([]byte, 1024),
+		reader:    r,
 	}
 }
 
+// refills the buffer when it has been fully consumed.
+// returns EOF when the stream is exhausted, or the underlying read error.
 func (b *BencodeParser) bufIdxCheckAndHandle() error {
-	// Refill buffer if we've reached the end
-	if b.cur_idx >= b.buf_len {
-
-		// primarily for testing
-		if b.reader == nil {
-			return EOF
-		}
-
-		n, err := (*b.reader).Read(b.buf)
-		if err != nil {
-			return EOF
-		}
-		if n == 0 {
-			return EOF
-		}
-		b.buf_len = uint64(n)
-		b.cur_idx = 0
+	if b.cur_idx < b.buf_len {
+		return nil
 	}
 
-	return nil
+	// primarily for testing
+	if b.reader == nil || *b.reader == nil {
+		return EOF
+	}
+
+	// a reader may legally return (0, nil) or (n>0, err); handle both
+	for attempts := 0; attempts < 100; attempts++ {
+		n, err := (*b.reader).Read(b.buf)
+		if n > 0 {
+			b.buf_len = uint64(n)
+			b.cur_idx = 0
+			return nil // any error will be returned again by the next Read
+		}
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				return EOF
+			}
+			return err
+		}
+	}
+	return io.ErrNoProgress
 }
 
 // gets the current token value and returns it,
@@ -64,8 +74,6 @@ func (b *BencodeParser) bufIdxCheckAndHandle() error {
 // destructive process, increments current index by 1
 // handles EOB
 func (b *BencodeParser) consumeToken() (byte, error) {
-	// Safe access because buf_len > 0 and cur_idx < buf_len
-
 	if err := b.bufIdxCheckAndHandle(); err != nil {
 		return 0x00, err
 	}
@@ -90,11 +98,39 @@ func (b *BencodeParser) peekToken() (byte, error) {
 	return b.buf[b.cur_idx], nil
 }
 
+// consumes exactly n bytes, copying in chunks rather than byte by byte
+func (b *BencodeParser) readN(n uint64) ([]byte, error) {
+	prealloc := n
+	if prealloc > 64<<10 {
+		prealloc = 64 << 10 // don't trust a length prefix for allocation size
+	}
+	out := make([]byte, 0, prealloc)
+
+	for uint64(len(out)) < n {
+		if err := b.bufIdxCheckAndHandle(); err != nil {
+			return nil, err
+		}
+		take := b.buf_len - b.cur_idx
+		if rem := n - uint64(len(out)); take > rem {
+			take = rem
+		}
+		chunk := b.buf[b.cur_idx : b.cur_idx+take]
+		out = append(out, chunk...)
+		if b.captureBytes {
+			b.infoBytes = append(b.infoBytes, chunk...)
+		}
+		b.cur_idx += take
+	}
+	return out, nil
+}
+
 /*
 Read takes in a reader and an object to place keys into
 @params
 reader - reader object that represents the input stream
-v - any struct in which bencode fields will be injected to
+v - pointer to a struct (or map) in which bencode fields will be injected.
+    Fields are matched by `bencode` tag, then `json` tag, then field name (case-insensitive).
+    A [20]byte field named InfoHash is filled with the SHA-1 of the raw "info" dict.
 @returns
 returns nil reader or unparsable errors
 */
@@ -104,40 +140,19 @@ func Read(reader io.Reader, v any) error {
 	}
 
 	b := makeBencodeParser(&reader)
-
-	b.reader = &reader
-	n, err := reader.Read(b.buf)
-
-	if err != nil {
-		return err
-	}
-	b.buf_len = uint64(n)
-	err = b.unmarshal(v)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return b.unmarshal(v)
 }
 
 func (b *BencodeParser) irToBencode(ir map[string]any, data any) error {
-	ir["peers"] = ""
-	// prettyPrintMap(ir)
-	// Convert IR → struct via JSON (bridge, not ideal but workable)
-	marshalled, err := json.Marshal(ir)
-	if err != nil {
-		return fmt.Errorf("failed to marshal IR: %w", err)
-	}
-	if unmarshalErr := json.Unmarshal(marshalled, data); unmarshalErr != nil {
-		fmt.Printf("here ->%x", b.buf[b.cur_idx])
-		return fmt.Errorf("failed to unmarshal IR into torrent struct: %w", unmarshalErr)
-		// return fmt.Errorf("failed to unmarshal IR into torrent struct: %w\nData : \n%s", unmarshalErr, string(b.buf))
+	rv := reflect.ValueOf(data).Elem()
+	if err := assign(rv, ir, ""); err != nil {
+		return fmt.Errorf("failed to decode into %T: %w", data, err)
 	}
 
-	if err = setInfoHash(data, b.infoBytes); err != nil {
-		return nil
+	// only structs can carry an InfoHash
+	if rv.Kind() == reflect.Struct {
+		return setInfoHash(data, b.infoBytes)
 	}
-
 	return nil
 }
 
@@ -152,17 +167,15 @@ func setInfoHash(data any, infoBytes []byte) error {
 	val = val.Elem() // get the struct value
 
 	field := val.FieldByName("InfoHash")
-	if !field.IsValid() {
-		return fmt.Errorf("field InfoHash not found")
+	if !field.IsValid() || len(infoBytes) == 0 {
+		return nil // nothing to set (e.g. not a torrent, or no info dict present)
 	}
 	if !field.CanSet() {
 		return fmt.Errorf("field InfoHash cannot be set (maybe unexported)")
 	}
 
-	// Compute SHA-1
 	sum := sha1.Sum(infoBytes)
 
-	// Field must be assignable to [20]byte
 	if field.Type() == reflect.TypeOf([20]byte{}) {
 		field.Set(reflect.ValueOf(sum))
 		return nil
@@ -171,50 +184,45 @@ func setInfoHash(data any, infoBytes []byte) error {
 	return fmt.Errorf("InfoHash field is wrong type")
 }
 
-func prettyPrintMap(x map[string]any) {
-	bc, err := json.MarshalIndent(x, "", "  ")
-	if err != nil {
-		fmt.Printf("error: %s", err)
-	}
-	fmt.Print(string(bc))
-}
-
 func (b *BencodeParser) unmarshal(data any) error {
+	rv := reflect.ValueOf(data)
+	if rv.Kind() != reflect.Ptr || rv.IsNil() {
+		return fmt.Errorf("data must be a non-nil pointer")
+	}
+
+	first, err := b.peekToken()
+	if err != nil {
+		return fmt.Errorf("unable to parse bencode raw data - %w", err)
+	}
+	if first != 'd' {
+		return fmt.Errorf("top level bencode value must be a dictionary")
+	}
+
 	IRData, err := b.parseValue()
 	if err != nil {
-		return fmt.Errorf("unable to parse bencode raw data - %s", err)
+		return fmt.Errorf("unable to parse bencode raw data - %w", err)
 	}
 
-	// prettyPrintMap(IRData.(map[string]any))
-	err = b.irToBencode(IRData.(map[string]any), data)
-	if err != nil {
-		// return fmt.Errorf("Unable to convert IR to struct %s\n", err)
-		return err
-	}
-
-	return nil
+	return b.irToBencode(IRData.(map[string]any), data)
 }
 
 func (b *BencodeParser) parseValue() (any, error) {
-	if b.cur_idx >= uint64(len(b.buf)) {
-		return nil, fmt.Errorf("index out of range of b.ffer")
+	c, err := b.peekToken() // also refills the buffer when needed
+	if err != nil {
+		return nil, err
 	}
 
-	switch string(b.buf[b.cur_idx]) {
-	case "i": // int
-		// fmt.PrintLn("Parsing int")
+	switch {
+	case c == 'i': // int
 		return b.acceptInt()
-	case "0", "1", "2", "3", "4", "5", "6", "7", "8", "9": // string
-		// fmt.PrintLn("Parsing string")
+	case c >= '0' && c <= '9': // string
 		return b.acceptString()
-	case "d": // dict (map[string]any)
-		// fmt.PrintLn("Parsing dict")
+	case c == 'd': // dict (map[string]any)
 		return b.acceptDict()
-	case "l": // list ([]any)
-		// fmt.PrintLn("Parsing List")
+	case c == 'l': // list ([]any)
 		return b.acceptList()
 	default:
-		return nil, fmt.Errorf("could not find a suitable accept type for %s at index %d", string(b.buf[b.cur_idx]), b.cur_idx)
+		return nil, fmt.Errorf("could not find a suitable accept type for %q", c)
 	}
 }
 
@@ -222,94 +230,87 @@ func (b *BencodeParser) acceptDict() (map[string]any, error) {
 	res := make(map[string]any)
 
 	curval, consumeErr := b.consumeToken()
-	// consume err check
 	if consumeErr != nil {
 		return res, consumeErr
 	}
 
-	// check if valid call of acceptDict()
-	if string(curval) != "d" {
-		return res, fmt.Errorf("Unable to parse dicitonary expected initial token 'd' however got %s\n", string(curval))
+	if curval != 'd' {
+		return res, fmt.Errorf("Unable to parse dicitonary expected initial token 'd' however got %q\n", curval)
 	}
 
-	isFirst := b.numDictsInInfoParsed == 0
-	if b.numDictsInInfoParsed >= 0 { // is first dict in info
-		b.numDictsInInfoParsed++
+	b.depth++
+	defer func() { b.depth-- }()
+	if b.depth > maxDepth {
+		return res, fmt.Errorf("bencode nesting too deep")
 	}
+	isRoot := b.depth == 1
 
-	// can now parse dict bytes
-	numParsed := 0
-	lastKey := ""
 	for {
-		curval, peekError := b.peekToken()
-		if peekError != nil {
-			return res, nil
-
+		c, peekErr := b.peekToken()
+		if peekErr != nil {
+			return res, peekErr // truncated input, don't silently accept it
 		}
-		if string(curval) == "e" {
-			b.consumeToken() // get ready for next parse
-			break
+		if c == 'e' {
+			b.consumeToken()
+			return res, nil
+		}
+
+		// keys must be strings
+		if c < '0' || c > '9' {
+			return res, fmt.Errorf("Key is not of type string invalid bencode")
+		}
+		key, keyErr := b.acceptString()
+		if keyErr != nil {
+			return res, keyErr
+		}
+
+		// capture the raw bytes of the root dict's "info" value for the info hash
+		capture := isRoot && key == "info"
+		if capture {
+			b.infoBytes = b.infoBytes[:0]
+			b.captureBytes = true
 		}
 
 		value, valueErr := b.parseValue()
 
-		// check value err
+		if capture {
+			b.captureBytes = false
+		}
 		if valueErr != nil {
 			return res, valueErr
 		}
 
-		// is a string
-		if numParsed%2 == 0 {
-			// must be of type string
-			s, ok := value.(string)
-
-			if !ok {
-				return res, fmt.Errorf("Key is not of type string invalid bencode")
-			}
-			lastKey = s
-
-		} else { // is a value
-			// check if inside info, and check if its a dict if so increment depth
-			if _, ok := value.(map[string]any); ok && b.numDictsInInfoParsed >= 0 {
-				b.numDictsInInfoParsed++
-			}
-			res[lastKey] = value
-		}
-		numParsed++
+		res[key] = value
 	}
-	// if we are in info, decrement cause were are returning
-	if isFirst {
-		b.captureBytes = false
-	}
-	return res, nil
 }
 
 func (b *BencodeParser) acceptList() ([]any, error) {
 	resList := make([]any, 0)
 	curval, consumeErr := b.consumeToken()
-	// check consume error
 	if consumeErr != nil {
 		return resList, consumeErr
 	}
-	// check if this is a valid call of acceptList()
-	if string(curval) != "l" {
+	if curval != 'l' {
 		return resList, fmt.Errorf("unable to parse list, initial char is not an 'l'\n")
 	}
-	// start parsing value bytes
+
+	b.depth++
+	defer func() { b.depth-- }()
+	if b.depth > maxDepth {
+		return resList, fmt.Errorf("bencode nesting too deep")
+	}
+
 	for {
 		curval, peekErr := b.peekToken()
-		// consume err check
 		if peekErr != nil {
 			return resList, peekErr
 		}
-		// finished parsing
-		if string(curval) == "e" {
-			b.consumeToken() // get next token, cant throw error as we know e exists
+		if curval == 'e' {
+			b.consumeToken()
 			break
 		}
-		// valid parse value
-		value, valueErr := b.parseValue()
 
+		value, valueErr := b.parseValue()
 		if valueErr != nil {
 			return resList, valueErr
 		}
@@ -323,101 +324,87 @@ func (b *BencodeParser) acceptList() ([]any, error) {
 func (b *BencodeParser) acceptInt() (int64, error) {
 	// Expect initial 'i'
 	cur, err := b.consumeToken()
-	if err != nil || cur != 'i' {
+	if err != nil {
+		return 0, err
+	}
+	if cur != 'i' {
 		return 0, fmt.Errorf("expected 'i' at start of integer")
 	}
 
-	isNegative := false
-	var num int64
-	var digits int
-	leadingZero := false
-
+	// collect everything up to the terminating 'e'
+	raw := make([]byte, 0, 20)
 	for {
 		cur, err = b.consumeToken()
 		if err != nil {
-			return 0, EOF
+			return 0, err
 		}
-
 		if cur == 'e' {
 			break
 		}
-
-		// handle minus sign
-		if digits == 0 && !isNegative && cur == '-' {
-			isNegative = true
-			continue
+		if len(raw) >= 20 { // longest valid int64 is 20 chars ("-9223372036854775808")
+			return 0, fmt.Errorf("integer too long")
 		}
+		raw = append(raw, cur)
+	}
 
-		digit, err := isDigit(cur)
-		if err != nil {
-			return 0, fmt.Errorf("invalid character '%c' in integer", cur)
-		}
-
-		if digits == 0 && digit == 0 {
-			leadingZero = true
-		} else if leadingZero {
-			// any digit after leading zero is illegal
-			return 0, fmt.Errorf("invalid leading zero in integer")
-		}
-
-		num = num*10 + digit
-		digits++
+	s := string(raw)
+	digits := s
+	isNegative := false
+	if strings.HasPrefix(s, "-") {
+		isNegative = true
+		digits = s[1:]
 	}
 
 	// no digits at all (e.g. "ie" or "i-e")
-	if digits == 0 {
+	if digits == "" {
 		return 0, fmt.Errorf("empty integer")
 	}
-
-	// reject -0
-	if isNegative && num == 0 {
+	for i := 0; i < len(digits); i++ {
+		if _, err := isDigit(digits[i]); err != nil {
+			return 0, fmt.Errorf("invalid character '%c' in integer", digits[i])
+		}
+	}
+	if len(digits) > 1 && digits[0] == '0' {
+		return 0, fmt.Errorf("invalid leading zero in integer")
+	}
+	if isNegative && digits == "0" {
 		return 0, NEGATIVE_ZERO_VALUE
 	}
 
-	if isNegative {
-		return -num, nil
+	// ParseInt catches overflow
+	num, err := strconv.ParseInt(s, 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("invalid integer %q - %w", s, err)
 	}
-
 	return num, nil
 }
 
-// retruns (string value, index of end of string)
+// Strings are arbitrary bytes in bencode (e.g. the pieces field), so the raw
+// bytes are kept as-is. Go strings can hold any byte sequence.
 func (b *BencodeParser) acceptString() (string, error) {
-	// get string length parsed
 	stringLength, err := b.getStringLength()
 	if err != nil {
-		return "", fmt.Errorf("unable to parse string length - %s", err)
+		return "", fmt.Errorf("unable to parse string length - %w", err)
 	}
 
-	// cur token should now be start of the string
-	res := ""
-
-	// we know how long to scan for, only error can be EOF
-	for i := 0; i < int(stringLength); i++ {
-		curval, consumeErr := b.consumeToken()
-		if consumeErr != nil {
-			return "", consumeErr
-		}
-		res += string(curval)
+	data, err := b.readN(stringLength)
+	if err != nil {
+		return "", err
 	}
-
-	if res == "info" {
-		b.numDictsInInfoParsed = 0 // in info key but 0 depth, waiting for dict value
-		b.captureBytes = true
-	}
-	// cur token should now be start of next item
-	return res, nil
+	return string(data), nil
 }
 
 func (b *BencodeParser) getStringLength() (uint64, error) {
-	res := ""
+	res := make([]byte, 0, 8)
 	curval, consumeErr := b.consumeToken()
 	for consumeErr == nil {
-		_, digitErr := isDigit(curval)
-		if digitErr != nil {
+		if _, digitErr := isDigit(curval); digitErr != nil {
 			break // non digit number
 		}
-		res += string(curval)
+		if len(res) >= 20 {
+			return 0, fmt.Errorf("string length too long")
+		}
+		res = append(res, curval)
 		curval, consumeErr = b.consumeToken()
 	}
 
@@ -427,18 +414,227 @@ func (b *BencodeParser) getStringLength() (uint64, error) {
 	}
 
 	// curval is not a digit
-	if string(curval) != ":" {
-		return 0, fmt.Errorf("Unexpected token %s, expected : for end of string length or digits before this", string(curval))
+	if curval != ':' {
+		return 0, fmt.Errorf("Unexpected token %q, expected : for end of string length or digits before this", curval)
+	}
+	if len(res) == 0 {
+		return 0, fmt.Errorf("missing string length")
+	}
+	if len(res) > 1 && res[0] == '0' {
+		return 0, fmt.Errorf("invalid leading zero in string length")
 	}
 
-	return strconv.ParseUint(res, 10, 64)
+	return strconv.ParseUint(string(res), 10, 64)
 }
 
 func isDigit(c byte) (int64, error) {
-	digit, err := strconv.Atoi(string(c))
-	if err != nil {
-		return 0, err
+	if c < '0' || c > '9' {
+		return 0, fmt.Errorf("%q is not a digit", c)
+	}
+	return int64(c - '0'), nil
+}
+
+// == IR -> user struct == //
+
+func bencodeType(v any) string {
+	switch v.(type) {
+	case string:
+		return "string"
+	case int64:
+		return "integer"
+	case []any:
+		return "list"
+	case map[string]any:
+		return "dictionary"
+	}
+	return fmt.Sprintf("%T", v)
+}
+
+func pathErr(path string, format string, a ...any) error {
+	if path == "" {
+		path = "<root>"
+	}
+	return fmt.Errorf("%s: %s", path, fmt.Sprintf(format, a...))
+}
+
+// assign decodes a parsed bencode value (string, int64, []any, map[string]any)
+// into dst, converting directly so binary strings are never mangled.
+func assign(dst reflect.Value, src any, path string) error {
+	switch dst.Kind() {
+	case reflect.Ptr:
+		if dst.IsNil() {
+			dst.Set(reflect.New(dst.Type().Elem()))
+		}
+		return assign(dst.Elem(), src, path)
+
+	case reflect.Interface:
+		if dst.NumMethod() != 0 {
+			return pathErr(path, "cannot decode into non-empty interface %s", dst.Type())
+		}
+		dst.Set(reflect.ValueOf(src))
+		return nil
+
+	case reflect.String:
+		s, ok := src.(string)
+		if !ok {
+			return pathErr(path, "expected string, got %s", bencodeType(src))
+		}
+		dst.SetString(s)
+		return nil
+
+	case reflect.Bool:
+		i, ok := src.(int64)
+		if !ok || (i != 0 && i != 1) {
+			return pathErr(path, "expected integer 0 or 1 for bool, got %s", bencodeType(src))
+		}
+		dst.SetBool(i == 1)
+		return nil
+
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		i, ok := src.(int64)
+		if !ok {
+			return pathErr(path, "expected integer, got %s", bencodeType(src))
+		}
+		if dst.OverflowInt(i) {
+			return pathErr(path, "integer %d overflows %s", i, dst.Type())
+		}
+		dst.SetInt(i)
+		return nil
+
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		i, ok := src.(int64)
+		if !ok {
+			return pathErr(path, "expected integer, got %s", bencodeType(src))
+		}
+		if i < 0 {
+			return fmt.Errorf("%s: %w", path, INVALID_NEGATIVE_VALUE)
+		}
+		if dst.OverflowUint(uint64(i)) {
+			return pathErr(path, "integer %d overflows %s", i, dst.Type())
+		}
+		dst.SetUint(uint64(i))
+		return nil
+
+	case reflect.Slice:
+		if dst.Type().Elem().Kind() == reflect.Uint8 {
+			s, ok := src.(string)
+			if !ok {
+				return pathErr(path, "expected string for byte slice, got %s", bencodeType(src))
+			}
+			dst.SetBytes([]byte(s))
+			return nil
+		}
+		list, ok := src.([]any)
+		if !ok {
+			return pathErr(path, "expected list, got %s", bencodeType(src))
+		}
+		out := reflect.MakeSlice(dst.Type(), len(list), len(list))
+		for i := range list {
+			if err := assign(out.Index(i), list[i], fmt.Sprintf("%s[%d]", path, i)); err != nil {
+				return err
+			}
+		}
+		dst.Set(out)
+		return nil
+
+	case reflect.Array:
+		if dst.Type().Elem().Kind() == reflect.Uint8 {
+			s, ok := src.(string)
+			if !ok {
+				return pathErr(path, "expected string for byte array, got %s", bencodeType(src))
+			}
+			if len(s) != dst.Len() {
+				return pathErr(path, "expected %d bytes, got %d", dst.Len(), len(s))
+			}
+			reflect.Copy(dst, reflect.ValueOf(s))
+			return nil
+		}
+		list, ok := src.([]any)
+		if !ok {
+			return pathErr(path, "expected list, got %s", bencodeType(src))
+		}
+		if len(list) != dst.Len() {
+			return pathErr(path, "expected %d elements, got %d", dst.Len(), len(list))
+		}
+		for i := range list {
+			if err := assign(dst.Index(i), list[i], fmt.Sprintf("%s[%d]", path, i)); err != nil {
+				return err
+			}
+		}
+		return nil
+
+	case reflect.Map:
+		if dst.Type().Key().Kind() != reflect.String {
+			return pathErr(path, "map keys must be strings, got %s", dst.Type().Key())
+		}
+		m, ok := src.(map[string]any)
+		if !ok {
+			return pathErr(path, "expected dictionary, got %s", bencodeType(src))
+		}
+		if dst.IsNil() {
+			dst.Set(reflect.MakeMapWithSize(dst.Type(), len(m)))
+		}
+		for k, v := range m {
+			elem := reflect.New(dst.Type().Elem()).Elem()
+			if err := assign(elem, v, path+"."+k); err != nil {
+				return err
+			}
+			dst.SetMapIndex(reflect.ValueOf(k).Convert(dst.Type().Key()), elem)
+		}
+		return nil
+
+	case reflect.Struct:
+		m, ok := src.(map[string]any)
+		if !ok {
+			return pathErr(path, "expected dictionary, got %s", bencodeType(src))
+		}
+		exact, folded := structFieldIndex(dst.Type())
+		for key, v := range m {
+			idx, found := exact[key]
+			if !found {
+				idx, found = folded[strings.ToLower(key)]
+			}
+			if !found {
+				continue // unknown keys are ignored
+			}
+			if err := assign(dst.Field(idx), v, path+"."+key); err != nil {
+				return err
+			}
+		}
+		return nil
 	}
 
-	return int64(digit), nil
+	return pathErr(path, "unsupported destination type %s", dst.Type())
+}
+
+// maps bencode keys to struct field indexes using the `bencode` tag, then the
+// `json` tag, then the field name.
+func structFieldIndex(t reflect.Type) (exact map[string]int, folded map[string]int) {
+	exact = make(map[string]int)
+	folded = make(map[string]int)
+	for i := 0; i < t.NumField(); i++ {
+		sf := t.Field(i)
+		if sf.PkgPath != "" { // unexported
+			continue
+		}
+		name := sf.Name
+		tag := sf.Tag.Get("bencode")
+		if tag == "" {
+			tag = sf.Tag.Get("json")
+		}
+		if tag != "" {
+			tag = strings.Split(tag, ",")[0]
+			if tag == "-" {
+				continue
+			}
+			if tag != "" {
+				name = tag
+			}
+		}
+		exact[name] = i
+		if _, dup := folded[strings.ToLower(name)]; !dup {
+			folded[strings.ToLower(name)] = i
+		}
+	}
+	return exact, folded
 }

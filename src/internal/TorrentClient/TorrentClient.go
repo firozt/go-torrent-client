@@ -290,7 +290,7 @@ func (t TorrentClient) sendConnectUDPReq(udpURL *url.URL) (uint64, error) {
 }
 
 // PeerHandshakeProtocol attempts to start a connection to a peer using the peer communications protocol
-// this is always done via tcp or utp
+// this is always done via tcp or utp, for this implementation we do tcp since its always supported
 func (c TorrentClient) PeerHandshakeProtocol(peer peers.Peer, infoHash [20]byte) (*net.TCPConn, error) {
 	if len(peer.IP()) == 0 || peer.Port() == 0 {
 		return nil, fmt.Errorf("peer is malformed - %s", peer.Address())
@@ -317,6 +317,7 @@ func (c TorrentClient) PeerHandshakeProtocol(peer peers.Peer, infoHash [20]byte)
 		return nil, err
 	}
 
+	// validate handhsake message was sent
 	if n != 68 {
 		conn.Close()
 		return nil, fmt.Errorf("number of bytes returned is not 68, the length of the expected response instead its %d", n)
