@@ -14,6 +14,7 @@ import (
 	tracker "github.com/firozt/go-torrent/src/internal/Tracker"
 )
 
+
 func TestHandleHTTPScheme(t *testing.T) {
 	type TestCase struct {
 		testname    string
@@ -170,7 +171,7 @@ func TestUDPHandshake(t *testing.T) {
 		{
 			testname: "sanity check - failing",
 			input: Input{
-				url: "udp://tracker.publictracker.xyz:6969/announce",
+				url: "udp://tracker.opentrackr.org:1337/announce",
 				torrentFile: torrent.TorrentFile{
 					InfoHash: [20]byte{
 						0x12, 0x34, 0x56, 0x78,
@@ -190,7 +191,7 @@ func TestUDPHandshake(t *testing.T) {
 		{
 			testname: "ubuntu torrent - successful UDP handshake",
 			input: Input{
-				url: "udp://tracker.publictracker.xyz:6969/announce",
+				url: "udp://tracker.opentrackr.org:1337/announce",
 				torrentFile: torrent.TorrentFile{
 					InfoHash: [20]byte{
 						0xb4, 0x51, 0x2d, 0x64,
