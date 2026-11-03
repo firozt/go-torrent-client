@@ -46,8 +46,8 @@ func TestHandleHTTPScheme(t *testing.T) {
 		CreationDate: 1700000000,
 		PieceLength:  256 * 1024,
 		Pieces: [][20]byte{
-			[20]byte{'P', 'I', 'E', 'C', 'E', '0', '0', '1'},
-			[20]byte{'P', 'I', 'E', 'C', 'E', '0', '0', '2'},
+			{'P', 'I', 'E', 'C', 'E', '0', '0', '1'},
+			{'P', 'I', 'E', 'C', 'E', '0', '0', '2'},
 		},
 		Length: 1024 * 1024 * 1024,
 		Files: []torrent.TorrentFileField{
@@ -191,14 +191,21 @@ func TestUDPHandshake(t *testing.T) {
 		{
 			testname: "ubuntu torrent - successful UDP handshake",
 			input: Input{
-				url: "udp://tracker.opentrackr.org:1337/announce",
+				url: "udp://tracker.leechers-paradise.org:6969", //big-buck-bunny.torrent
 				torrentFile: torrent.TorrentFile{
+					// InfoHash: [20]byte{
+					// 	0xb4, 0x51, 0x2d, 0x64,
+					// 	0x66, 0x7b, 0xf4, 0x90,
+					// 	0x1d, 0x7a, 0xc0, 0xf5,
+					// 	0xcf, 0x5b, 0xa6, 0x28,
+					// 	0xc1, 0x68, 0x2f, 0x5a,
+					// },
 					InfoHash: [20]byte{
-						0xb4, 0x51, 0x2d, 0x64,
-						0x66, 0x7b, 0xf4, 0x90,
-						0x1d, 0x7a, 0xc0, 0xf5,
-						0xcf, 0x5b, 0xa6, 0x28,
-						0xc1, 0x68, 0x2f, 0x5a,
+						0xdd, 0x82, 0x55, 0xec,
+						0xdc, 0x7c, 0xa5, 0x5f,
+						0xb0, 0xbb, 0xf8, 0x13,
+						0x23, 0xd8, 0x70, 0x62,
+						0xdb, 0x1f, 0x6d, 0x1c,
 					},
 				},
 			},
@@ -219,7 +226,10 @@ func TestUDPHandshake(t *testing.T) {
 		t.Run(tc.testname, func(t *testing.T) {
 			client := NewTorrentClient(1234)
 			got, err := client.getTrackerResponse(tc.input.url, &tc.input.torrentFile)
-			fmt.Printf("[TEST]: %+v\n", got)
+			if err != nil {
+				t.Errorf("got unexptected error, %+v", err)
+			}
+			fmt.Printf("[TEST]: got -> %+v\n", got)
 			peers, errp := got.GetPeers()
 			if errp != nil {
 				t.Errorf("peers err, %+v", errp)

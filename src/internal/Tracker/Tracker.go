@@ -4,10 +4,14 @@ package tracker
 import (
 	"crypto/rand"
 	"encoding/binary"
+	"errors"
 	"fmt"
 
 	peers "github.com/firozt/go-torrent/src/internal/Peers"
 )
+
+
+var ErrNoPeers = errors.New("tracker response contains no peers")
 
 // TrackerResponse depicts the tracker response given connect + announce (or just announce via http) has been accomplished
 // successfully
@@ -21,6 +25,7 @@ type TrackerResponse struct {
 	RawPeers      []byte        `json:"peers"`
 }
 
+
 // GetPeers gets peers and if non existant will generate from raw peers
 // May return a raw peers does not exist error
 func (t *TrackerResponse) GetPeers() (*[]peers.Peer, error) {
@@ -30,7 +35,7 @@ func (t *TrackerResponse) GetPeers() (*[]peers.Peer, error) {
 	}
 
 	if len(t.RawPeers) == 0 {
-		return nil, fmt.Errorf("peers does not exist for this variable")
+		return nil, ErrNoPeers
 	}
 	val, err := peers.MakePeer([]byte(t.RawPeers))
 	if err != nil {

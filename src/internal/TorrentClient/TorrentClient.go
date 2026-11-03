@@ -142,7 +142,7 @@ func (t TorrentClient) udpHandshakeProtocol(udpURL *url.URL, torrentfile *torren
 		// make peers
 		peers, err := res.GetPeers()
 		if err != nil {
-			fmt.Errorf("announce succeeeded however deserialzing peers failed with error %+v\n", err)
+			return nil, fmt.Errorf("announce succeeeded however deserialzing peers failed with error %+v\n", err)
 		}
 		fmt.Printf("[LOG]: passed announce request with %d peer(s) and interval %d seconds\n", len(*peers), res.Interval)
 	}
