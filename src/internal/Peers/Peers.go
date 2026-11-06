@@ -2,7 +2,6 @@
 package peers
 
 import (
-	"bytes"
 	"encoding/binary"
 	"fmt"
 	"net"
@@ -93,9 +92,10 @@ type PeerHandshake struct {
 
 func NewBitTorrentProtocolHandshake(infoHash, peerID [20]byte) *PeerHandshake {
 	return &PeerHandshake{
-		StrLen:       18,
+		StrLen:       19,
 		ProtocolName: "BitTorrent protocol",
-		Reserved:     [8]byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
+		Reserved:     [8]byte{},
+		InfoHash:     infoHash,
 		PeerID:       peerID,
 	}
 }
@@ -186,6 +186,7 @@ type Message struct {
 }
 
 // PeerConn represents and manages the actual connection from a peer to another peer
+// connection must already be established
 type PeerConn struct {
 	peer        Peer
 	conn        net.Conn
@@ -210,7 +211,7 @@ func MakePeerConn(peer Peer, conn net.Conn) *PeerConn {
 		sendChannel: make(chan Message),
 		AmChoked:    true,
 		IsChoked:    true,
-		// bitfield: ,
+		bitfield: Bitfield{},
 	}
 }
 

@@ -7,6 +7,7 @@ import (
 	"crypto/rand"
 	"encoding/binary"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/url"
@@ -69,6 +70,31 @@ func (t *TorrentClient) StartTorrent(torrentfile torrent.TorrentFile) {
 	if trackerResponse == nil {
 		panic("No valid tracker annoucne responses")
 	}
+
+	peerlist, err := trackerResponse.GetPeers()
+
+	if len(*peerlist) == 0 {
+		panic("No peers found")
+	}
+
+	// now we have peer list we can iterate over it and find valid activePeers
+
+	var peerConns []*peers.PeerConn
+
+	for _, p := range *peerlist {
+		conn, err := t.PeerHandshakeProtocol(p,torrentfile.InfoHash)
+
+		if err != nil {
+			fmt.Printf("[LOGS] peer %s timed out while attempting to connect -> %+v\n", p.Address(), err)
+			continue
+		}
+
+		// peer replied, make a conn
+		peerConns = append(peerConns,peers.MakePeerConn(p,conn) )
+		fmt.Printf("[LOGS] peer %s successfull handshake \n", p.Address())
+	}
+
+	fmt.Printf("[LOGS] succesfully connected to %d peers\n", len(peerConns))
 
 }
 
@@ -289,57 +315,76 @@ func (t TorrentClient) sendConnectUDPReq(udpURL *url.URL) (uint64, error) {
 
 }
 
-// PeerHandshakeProtocol attempts to start a connection to a peer using the peer communications protocol
-// this is always done via tcp or utp, for this implementation we do tcp since its always supported
+// PeerHandshakeProtocol attempts to establish a connection to a peer using
+// the BitTorrent peer wire protocol over TCP.
 func (c TorrentClient) PeerHandshakeProtocol(peer peers.Peer, infoHash [20]byte) (*net.TCPConn, error) {
 	if len(peer.IP()) == 0 || peer.Port() == 0 {
 		return nil, fmt.Errorf("peer is malformed - %s", peer.Address())
 	}
 
-	// build initHandshakeMsg
+	// Build initial handshake message.
 	initHandshakeMsg := peers.NewBitTorrentProtocolHandshake(infoHash, c.peerID)
+	handshakeBytes := initHandshakeMsg.SerializePeerHandshake()
 
-	// attempt to connect, 5 second timeout
+	// Establish TCP connection with a 5-second timeout.
 	conn, err := net.DialTimeout("tcp", peer.Address(), 5*time.Second)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to connect to peer: %w", err)
 	}
 
-	// send init msg
-	conn.Write(initHandshakeMsg.SerializePeerHandshake())
+	// Ensure connection is closed if anything fails.
+	success := false
+	defer func() {
+		if !success {
+			conn.Close()
+		}
+	}()
 
-	// wait for a response for 5 seconds then timeout
+	// Send initial handshake.
+	conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
 
-	readBuf := make([]byte, 1024)
+	_, err = conn.Write(handshakeBytes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to send handshake: %w", err)
+	}
+
+	// Read exactly 68 bytes for the peer handshake.
+	var response [68]byte
+
 	conn.SetReadDeadline(time.Now().Add(5 * time.Second))
-	n, err := conn.Read(readBuf)
+
+	_, err = io.ReadFull(conn, response[:])
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to read peer handshake: %w", err)
 	}
 
-	// validate handhsake message was sent
-	if n != 68 {
-		conn.Close()
-		return nil, fmt.Errorf("number of bytes returned is not 68, the length of the expected response instead its %d", n)
-	}
-
-	peerHandshakeResponse, err := peers.DeserializePeerHandshake([68]byte(readBuf))
+	// Deserialize handshake.
+	peerHandshakeResponse, err := peers.DeserializePeerHandshake(response)
 	if err != nil {
-		conn.Close()
-		return nil, err
+		return nil, fmt.Errorf("failed to deserialize peer handshake: %w", err)
 	}
 
+	// Validate info hash.
 	if peerHandshakeResponse.InfoHash != infoHash {
-		conn.Close()
-		return nil, fmt.Errorf("the infohash returned in the handshake are not equivilant, expected %x, got %x", infoHash, peerHandshakeResponse.InfoHash)
+		return nil, fmt.Errorf(
+			"peer returned incorrect infohash: expected %x, got %x",
+			infoHash,
+			peerHandshakeResponse.InfoHash,
+		)
 	}
 
-	// convert from net.conn interface to tcpconn obj
+	// Convert connection to TCP connection.
 	tcpConn, ok := conn.(*net.TCPConn)
 	if !ok {
-		fmt.Errorf("expected *net.TCPConn, got type %T", conn)
+		return nil, fmt.Errorf("expected *net.TCPConn, got %T", conn)
 	}
 
+	// Clear deadlines so subsequent peer communication isn't affected.
+	if err := tcpConn.SetDeadline(time.Time{}); err != nil {
+		return nil, fmt.Errorf("failed to clear connection deadlines: %w", err)
+	}
+
+	success = true
 	return tcpConn, nil
 }
 

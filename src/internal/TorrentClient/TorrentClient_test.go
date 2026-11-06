@@ -14,7 +14,6 @@ import (
 	tracker "github.com/firozt/go-torrent/src/internal/Tracker"
 )
 
-
 func TestHandleHTTPScheme(t *testing.T) {
 	type TestCase struct {
 		testname    string
@@ -247,6 +246,52 @@ func TestUDPHandshake(t *testing.T) {
 
 		})
 	}
+}
+
+func TestTorrent(t *testing.T) {
+
+	tclient := NewTorrentClient(12345)
+	t.Run("sanity check", func(t *testing.T) {
+		torrentfile := torrent.TorrentFile{
+			Name: "Big Buck Bunny",
+			Announce: []string{
+				"udp://tracker.leechers-paradise.org:6969",
+				"udp://tracker.coppersurfer.tk:6969",
+				"udp://tracker.opentrackr.org:1337",
+				"udp://explodie.org:6969",
+				"udp://tracker.empire-js.us:1337",
+				"wss://tracker.btorrent.xyz",
+				"wss://tracker.openwebtorrent.com",
+				"wss://tracker.fastcast.nz",
+			},
+			InfoHash: [20]byte{
+				0xdd, 0x82, 0x55, 0xec, 0xdc,
+				0x7c, 0xa5, 0x5f, 0xb0, 0xbb,
+				0xf8, 0x13, 0x23, 0xd8, 0x70,
+				0x62, 0xdb, 0x1f, 0x6d, 0x1c,
+			},
+			CreationDate: 1490916601,
+			PieceLength:  262144,
+			// Pieces:       pieces,
+			Length: 276445467,
+			Files:  nil,
+		}
+
+		tclient.StartTorrent(torrentfile)
+
+		// if tc.throwsErr && err == nil {
+		// 	t.Errorf("Expected an error however recieved none")
+		// }
+		//
+		// if !tc.throwsErr && err != nil {
+		// 	t.Errorf("An error was thrown none expected, %v", err)
+		// }
+		//
+		// if got == nil {
+		// 	t.Errorf("got was nill, expected a non nil tcp connection object")
+		// }
+
+	})
 }
 
 func TestPeerHandshake(t *testing.T) {
