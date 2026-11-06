@@ -2,6 +2,7 @@
 package peers
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
 	"net"
@@ -147,9 +148,40 @@ func DeserializePeerHandshake(raw [68]byte) (*PeerHandshake, error) {
 	return &msg, nil
 }
 
+type messageID uint8
+
+const (
+	MsgChoke         messageID = 0
+	MsgUnchoke       messageID = 1
+	MsgInterested    messageID = 2
+	MsgNotInterested messageID = 3
+	MsgHave          messageID = 4
+	MsgBitfield      messageID = 5
+	MsgRequest       messageID = 6
+	MsgPiece         messageID = 7
+	MsgCancel        messageID = 8
+)
+
+// We need to create a bitfield datastructure, golang only goes down to bytes
+// so we need to create some abstraction here to handle that
+type Bitfield []byte // alias type
+
+func (bf Bitfield) HasPiece(index int) bool {
+    byteIndex := index / 8
+    offset := index % 8
+    return bf[byteIndex]>>(7-offset)&1 != 0
+}
+
+// SetPiece sets a bit in the bitfield
+func (bf Bitfield) SetPiece(index int) {
+    byteIndex := index / 8
+    offset := index % 8
+    bf[byteIndex] |= 1 << (7 - offset)
+}
+
 // Message represents a message that is sent/recieved during p2p communications
 type Message struct {
-	ID      uint8
+	ID      messageID
 	Payload []byte
 }
 
@@ -158,6 +190,17 @@ type PeerConn struct {
 	peer        Peer
 	conn        net.Conn
 	sendChannel chan Message
+	bitfield    Bitfield // wrapper for []byte
+	AmChoked    bool
+	IsChoked    bool
+	sendQueue chan []byte // maybe a string?
+}
+
+// client shared state that should always be thread safe!!
+type ClientSharedState struct {
+	wantQueue chan uint // piece index	
+	bitfield Bitfield
+	mutex sync.Mutex
 }
 
 func MakePeerConn(peer Peer, conn net.Conn) *PeerConn {
@@ -165,8 +208,12 @@ func MakePeerConn(peer Peer, conn net.Conn) *PeerConn {
 		peer:        peer,
 		conn:        conn,
 		sendChannel: make(chan Message),
+		AmChoked:    true,
+		IsChoked:    true,
+		// bitfield: ,
 	}
 }
+
 
 func (pc PeerConn) StartLoop() {
 	defer pc.conn.Close() // close conn after loop ends
